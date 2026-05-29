@@ -1,12 +1,13 @@
-import React from "react";
 import { useReadContract } from "wagmi";
 import { ABIs } from "../abis";
-import { formatPrice } from "../utils/format";
-import { cn } from "../utils/format";
 
 interface Props {
   marketId: number;
   orderBookAddr: string;
+}
+
+function pct(price: bigint): number {
+  return Number(price) / 100;
 }
 
 export default function OrderBookView({ marketId, orderBookAddr }: Props) {
@@ -32,77 +33,71 @@ export default function OrderBookView({ marketId, orderBookAddr }: Props) {
     query: { enabled: !!orderBookAddr },
   });
 
-  const bidPrice = bestBid ? formatPrice(bestBid) : null;
-  const askPrice = bestAsk ? formatPrice(bestAsk) : null;
-  const spread =
-    bidPrice && askPrice
-      ? ((parseFloat(askPrice) - parseFloat(bidPrice)) * 100).toFixed(2)
-      : null;
+  const bidVal = bestBid ? pct(bestBid as bigint) : null;
+  const askVal = bestAsk ? pct(bestAsk as bigint) : null;
+  const spread = bidVal && askVal ? (askVal - bidVal).toFixed(2) : null;
+
+  const prices = (allPrices as bigint[] | undefined) ?? [];
+  const maxPrice = prices.length > 0 ? Math.max(...prices.map(p => Number(p) / 100)) : 100;
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-      <div className="px-5 py-3 border-b border-gray-800 flex items-center justify-between">
-        <h3 className="font-semibold text-sm">订单簿</h3>
-        {spread && (
-          <span className="text-xs text-gray-500">价差 {spread}%</span>
-        )}
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <BidAskCard label="BID" pct={bidVal} color="yes" />
+        <BidAskCard label="ASK" pct={askVal} color="no" />
       </div>
 
-      <div className="p-4">
-        {/* Best Bid/Ask Row */}
-        <div className="grid grid-cols-2 gap-3 mb-4">
-          <div className="bg-green-900/15 border border-green-800/20 rounded-lg p-3">
-            <div className="text-xs text-green-400 mb-1 flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-400"></span>
-              最佳买家 (BID)
-            </div>
-            <div className="text-lg font-mono font-semibold text-green-400">
-              {bidPrice ? `${(parseFloat(bidPrice) * 100).toFixed(1)}%` : "—"}
-            </div>
-            <div className="text-xs text-gray-500 font-mono mt-0.5">
-              {bidPrice ?? "—"}
-            </div>
-          </div>
-
-          <div className="bg-red-900/15 border border-red-800/20 rounded-lg p-3">
-            <div className="text-xs text-red-400 mb-1 flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-red-400"></span>
-              最佳卖家 (ASK)
-            </div>
-            <div className="text-lg font-mono font-semibold text-red-400">
-              {askPrice ? `${(parseFloat(askPrice) * 100).toFixed(1)}%` : "—"}
-            </div>
-            <div className="text-xs text-gray-500 font-mono mt-0.5">
-              {askPrice ?? "—"}
-            </div>
-          </div>
+      {spread && (
+        <div className="flex items-center justify-center gap-2 text-xs text-gray-400">
+          <span>Spread</span>
+          <span className="font-mono font-medium text-gray-600">{spread}%</span>
         </div>
+      )}
 
-        {/* Price Ladder */}
-        {allPrices && (allPrices as bigint[]).length > 0 ? (
+      {prices.length > 0 ? (
+        <div>
+          <p className="text-xs font-medium text-gray-400 mb-2">Price Depth</p>
           <div className="space-y-1">
-            <div className="text-xs text-gray-500 mb-2">价格深度</div>
-            {(allPrices as bigint[]).slice(0, 8).map((price, i) => {
-              const pct = (parseFloat(formatPrice(price)) * 100).toFixed(1);
+            {prices.slice(0, 8).map((price, i) => {
+              const p = Number(price) / 100;
+              const width = maxPrice > 0 ? (p / maxPrice) * 100 : 0;
               return (
                 <div key={i} className="flex items-center gap-2 text-xs">
-                  <span className="w-16 text-gray-500 font-mono">{pct}%</span>
-                  <div className="flex-1 h-4 bg-violet-500/20 rounded-sm relative overflow-hidden">
+                  <span className="w-12 text-right font-mono text-gray-500">{p.toFixed(0)}%</span>
+                  <div className="flex-1 h-5 bg-gray-100 rounded-sm relative overflow-hidden">
                     <div
-                      className="absolute right-0 h-full bg-violet-500/40 rounded-sm"
-                      style={{ width: `${pct}%` }}
-                    ></div>
+                      className="absolute right-0 h-full depth-bar-yes rounded-sm transition-all"
+                      style={{ width: `${width}%` }}
+                    />
                   </div>
                 </div>
               );
             })}
           </div>
-        ) : (
-          <div className="text-center py-6 text-gray-500 text-sm">
-            暂无订单簿数据
-          </div>
-        )}
+        </div>
+      ) : (
+        <div className="text-center py-8">
+          <div className="text-3xl mb-2 opacity-30">📋</div>
+          <p className="text-xs text-gray-400">No order book data</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BidAskCard({ label, pct, color }: { label: string; pct: number | null; color: "yes" | "no" }) {
+  return (
+    <div className={`rounded-xl p-4 border ${color === "yes" ? "bg-emerald-50/70 border-emerald-100" : "bg-rose-50/70 border-rose-100"}`}>
+      <div className={`text-xs font-medium mb-1 flex items-center gap-1.5 ${color === "yes" ? "text-emerald-600" : "text-rose-500"}`}>
+        <span className={`w-1.5 h-1.5 rounded-full ${color === "yes" ? "bg-emerald-500" : "bg-rose-400"}`} />
+        {label}
       </div>
+      <div className={`text-2xl font-bold font-mono ${color === "yes" ? "text-emerald-700" : "text-rose-600"}`}>
+        {pct !== null ? `${pct.toFixed(0)}%` : "—"}
+      </div>
+      {pct !== null && (
+        <div className="text-xs text-gray-400 font-mono mt-0.5">${(pct / 100).toFixed(4)}</div>
+      )}
     </div>
   );
 }

@@ -1,82 +1,139 @@
-import React from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useReadContract } from "wagmi";
 import { ABIs } from "../abis";
 import { CONTRACTS } from "../config/contracts";
 import MarketCard from "../components/MarketCard";
-import LoadingSkeleton from "../components/LoadingSkeleton";
 import EmptyState from "../components/EmptyState";
 
-function SectionHeader({
-  title,
-  subtitle,
-}: {
-  title: string;
-  subtitle?: string;
-}) {
+function HeroSection({ marketCount }: { marketCount: number }) {
   return (
-    <div className="flex items-center gap-3 mb-5">
-      <span className="w-0.5 h-5 bg-violet-500 rounded-full"></span>
-      <h2 className="text-lg font-semibold">{title}</h2>
-      {subtitle && <span className="text-sm text-gray-500">{subtitle}</span>}
-    </div>
+    <section className="hero-section">
+      <div className="hero-glow hero-glow-1" />
+      <div className="hero-glow hero-glow-2" />
+
+      <div style={{ position: 'relative', zIndex: 10, maxWidth: 520 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+          <div className="pulse-dot" />
+          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Arc Testnet · Prediction Market</span>
+        </div>
+
+        <h1 className="font-display" style={{ fontSize: 'clamp(26px, 3.5vw, 38px)', fontWeight: 600, lineHeight: 1.15, color: 'var(--text-primary)', marginBottom: 14 }}>
+          Decentralized Prediction Market
+          <span className="gradient-text" style={{ fontStyle: 'italic' }}> · On-chain</span>
+        </h1>
+
+        <p style={{ fontSize: 15, lineHeight: 1.7, color: 'var(--text-secondary)', maxWidth: 440 }}>
+          Binary YES / NO markets on arc. Self-custodied funds, smart contract settlement, transparent and trustless.
+        </p>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 24, marginTop: 28 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'JetBrains Mono', monospace" }}>{marketCount}</span>
+            <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 500, letterSpacing: '0.04em' }}>ACTIVE</span>
+          </div>
+          <div style={{ width: 1, height: 28, background: 'var(--border)' }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'JetBrains Mono', monospace" }}>USDC</span>
+            <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 500, letterSpacing: '0.04em' }}>COLLATERAL</span>
+          </div>
+          <div style={{ width: 1, height: 28, background: 'var(--border)' }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'JetBrains Mono', monospace" }}>100%</span>
+            <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 500, letterSpacing: '0.04em' }}>SETTLED</span>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 
 export default function HomePage() {
-  // Use nextMarketId to get actual count — it's the next ID to be assigned,
-  // so nextMarketId - 1 = last created market ID. This is more reliable than getMarketCount.
-  const { data: nextMarketId, isLoading: countLoading } = useReadContract({
+  const [marketIds, setMarketIds] = useState<number[]>([]);
+
+  const { data: rawCount, isLoading: countLoading, isError: countError, refetch } = useReadContract({
     abi: ABIs.PredictionMarketFactory,
     address: CONTRACTS.PredictionMarketFactory,
-    functionName: "nextMarketId",
+    functionName: "getMarketCount",
+    query: { staleTime: 0, gcTime: 0, retry: 3 },
   });
 
-  const marketCount = Number(nextMarketId ?? 0);
+  const count = Number(rawCount ?? 0n);
+
+  useEffect(() => {
+    if (count > 0) {
+      const ids = Array.from({ length: count }, (_, i) => i + 1);
+      setMarketIds(ids);
+    } else {
+      setMarketIds([]);
+    }
+  }, [count]);
+
+  const refresh = useCallback(() => {
+    refetch();
+  }, [refetch]);
 
   return (
-    <div className="space-y-8">
-      {/* Hero */}
-      <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-900/20 via-gray-900 to-fuchsia-900/20 border border-violet-800/20 p-8 md:p-12">
-        <div className="relative z-10">
-          <h1 className="text-3xl md:text-4xl font-bold mb-3">
-            去中心化预测市场
-          </h1>
-          <p className="text-gray-400 text-lg max-w-xl mb-6">
-            基于 Base Sepolia 的二元预测市场合约，支持任意主题的 YES/NO 交易
-          </p>
-          <div className="flex items-center gap-4 text-sm text-gray-500">
-            <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
-              Base Sepolia 测试网
-            </span>
-            <span>·</span>
-            <span>{marketCount} 个市场</span>
-          </div>
-        </div>
-        {/* Decorative */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-violet-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-        <div className="absolute bottom-0 left-0 w-48 h-48 bg-fuchsia-500/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
-      </section>
+    <div className="space-y-6">
+      <HeroSection marketCount={marketIds.length} />
 
-      {/* Markets Grid */}
-      <section>
-        <SectionHeader title="活跃市场" subtitle={`共 ${marketCount} 个`} />
-        {countLoading ? (
-          <LoadingSkeleton count={6} />
-        ) : marketCount === 0 ? (
-          <EmptyState
-            emoji="🔮"
-            title="暂无市场"
-            desc="成为第一个创建预测市场的人"
-          />
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {Array.from({ length: marketCount }, (_, i) => (
-              <MarketCard key={i} marketId={i} />
-            ))}
-          </div>
-        )}
-      </section>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <h2 className="font-display" style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)' }}>Markets</h2>
+          <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 3 }}>Click a card to trade</p>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {marketIds.length > 0 && (
+            <div className="tag-chip">
+              {marketIds.length} markets
+            </div>
+          )}
+          <button
+            onClick={refresh}
+            disabled={countLoading}
+            style={{
+              padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+              background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+              color: 'var(--text-secondary)', cursor: 'pointer',
+              opacity: countLoading ? 0.5 : 1,
+              transition: 'all 150ms',
+            }}
+          >
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      {countLoading ? (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="card" style={{ padding: 20, opacity: 0.5 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--border-strong)' }} />
+                <div style={{ width: 36, height: 10, borderRadius: 4, background: 'var(--bg-elevated)' }} />
+              </div>
+              <div style={{ width: '60%', height: 16, borderRadius: 6, background: 'var(--bg-elevated)', marginBottom: 16 }} />
+              <div style={{ height: 44, borderRadius: 10, background: 'var(--bg-elevated)', marginBottom: 14 }} />
+              <div style={{ display: 'flex', gap: 16, paddingTop: 12, borderTop: '1px solid var(--border-subtle)' }}>
+                <div style={{ width: 40, height: 10, borderRadius: 4, background: 'var(--bg-elevated)' }} />
+                <div style={{ width: 40, height: 10, borderRadius: 4, background: 'var(--bg-elevated)' }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : countError ? (
+        <EmptyState
+          title="Unable to Load"
+          desc="Check your network connection or verify the contract is deployed"
+        />
+      ) : marketIds.length === 0 ? (
+        <EmptyState title="No markets yet" desc="Be the first to create a prediction market" />
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+          {marketIds.map((id) => (
+            <MarketCard key={id} marketId={id} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

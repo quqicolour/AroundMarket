@@ -1,62 +1,47 @@
-import React, { useEffect } from "react";
-import { ExternalLink } from "lucide-react";
+import { useEffect } from "react";
+import { Loader2, CheckCircle2, XCircle, ExternalLink } from "lucide-react";
 
-interface TxToastProps {
-  txHash: string;
-  label?: string;
-  onClose: () => void;
+interface Props {
+  status: "pending" | "success" | "error";
+  label: string;
   explorerUrl?: string;
-  chainId?: number;
+  onClose: () => void;
 }
 
-const EXPLORER_BASE: Record<number, string> = {
-  8453: "https://basescan.org",
-  84532: "https://sepolia.basescan.org",
-  1: "https://etherscan.io",
-};
-
-export function getExplorerUrl(txHash: string, chainId: number = 84532): string {
-  const base = EXPLORER_BASE[chainId] ?? EXPLORER_BASE[84532];
-  return `${base}/tx/${txHash}`;
-}
-
-export default function TxToast({ txHash, label = "交易成功", onClose, explorerUrl }: TxToastProps) {
+export default function TxToast({ status, label, explorerUrl, onClose }: Props) {
   useEffect(() => {
-    const timer = setTimeout(onClose, 8000);
-    return () => clearTimeout(timer);
-  }, [onClose]);
-
-  const url = explorerUrl ?? getExplorerUrl(txHash);
+    if (status !== "pending") {
+      const t = setTimeout(onClose, 5000);
+      return () => clearTimeout(t);
+    }
+  }, [status, onClose]);
 
   return (
-    <div className="fixed bottom-6 right-6 z-[100] animate-slide-up">
-      <div className="bg-gray-900 border border-emerald-800/40 rounded-xl shadow-2xl p-4 max-w-sm">
-        <div className="flex items-start gap-3">
-          <span className="text-2xl">✅</span>
-          <div className="flex-1 min-w-0">
-            <p className="text-white font-semibold text-sm">{label}</p>
-            <div className="flex items-center gap-1.5 mt-1">
-              <span className="text-xs text-gray-500 font-mono truncate max-w-[160px]">
-                {txHash}
-              </span>
-              <a
-                href={url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-violet-400 hover:text-violet-300 transition flex-shrink-0"
-              >
-                <ExternalLink size={14} />
-              </a>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-white transition flex-shrink-0"
+    <div className="fixed bottom-6 right-6 z-50">
+      <div className={
+        `flex items-center gap-3 px-5 py-4 rounded-2xl shadow-lg text-white min-w-64 text-sm font-medium ${
+          status === "success" ? "bg-gradient-to-r from-emerald-500 to-teal-500" :
+          status === "error" ? "bg-gradient-to-r from-rose-500 to-pink-500" :
+          "bg-gradient-to-r from-gray-500 to-gray-600"
+        }`
+      }>
+        {status === "pending" && <Loader2 size={18} className="animate-spin flex-shrink-0" />}
+        {status === "success" && <CheckCircle2 size={18} className="flex-shrink-0" />}
+        {status === "error" && <XCircle size={18} className="flex-shrink-0" />}
+        <span className="flex-1">{label}</span>
+        {explorerUrl && status !== "pending" && (
+          <a
+            href={explorerUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 text-xs opacity-80 hover:opacity-100 transition"
           >
-            ✕
-          </button>
-        </div>
+            <ExternalLink size={12} />
+          </a>
+        )}
       </div>
     </div>
   );
 }
+
+export { TxToast };

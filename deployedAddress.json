@@ -1,16 +1,26 @@
 {
-  "network": "base_sepolia",
-  "timestamp": "2026-05-25T07:58:20.559Z",
+  "network": "arc_testnet",
+  "timestamp": "2026-05-29T09:16:11.609Z",
   "deployer": "0x93561385F0192956036537804fc4E90307cE38F7",
-  "collateral": "0xb70A27B166A940F93cfFa743b22c29d4907394C2",
+  "collateral": "0x8ec174Ef35f9dEAbe5F24Bd95331Db049066ECAA",
   "contracts": {
-    "ConditionalTokens": "0xe18dE10E06545D978ECe02E2f308c353480b9E2d",
-    "SettlementManager": "0xf52dFb3558dAA72F016EE0693ac47405d77a0186",
-    "OrderBookTemplate": "0x78e9Fce17A86093cCB0b3bc13372501c511C5a23",
-    "MatchingEngineTemplate": "0x5221493Dc046052142A88237f7924C2C35ea878f",
-    "MarketTemplate": "0xe96AfFA3817CE816eC6076E672c31DD8Fc3d9564",
-    "PredictionMarketFactory": "0xe5F297E7291145dCe2aB176BfB12c26473511966",
-    "EchoOptimisticOracle": "0xDF708c771BD041e605d9F95C66dC02f15dF3cF5C",
-    "OracleAdapter": "0x90b4b811Fe71b791Ca60a7abF987aB21c44eA8bD"
+    "ConditionalTokens": "0x83113DA858c644C3d0b2619bc28dAc57A666ADB9",
+    "SettlementManager": "0xD89DDFDF5c6F60B284923E499c703346D2eAB540",
+    "OrderBookTemplate": "0x02B145b19e77fd448Ee52939AE6b37DeFA3dFa14",
+    "MatchingEngineTemplate": "0x21CEfF3271Fb307BB40151e39890FDB7b234e2Ab",
+    "MarketTemplate": "0x6E120b81bAFdC091AE4B1ea1EaEFc66e993cc353",
+    "PredictionMarketFactory": "0xDF708c771BD041e605d9F95C66dC02f15dF3cF5C"
+  },
+  "firstMarket": {
+    "marketId": "1",
+    "market": "0xc25F44107a32dac6695f263bCDaB335c7d01A57c",
+    "collateral": "0x8ec174Ef35f9dEAbe5F24Bd95331Db049066ECAA",
+    "conditionId": "0x7f19fe3ca8d530012b4aee1f497d6434afd7d15f67f86edcbc3cb48a4e2b5900",
+    "questionId": "0x48bd5593dc165414c29346194fa540cc077c934bd3221b26c6933c6d3e198521",
+    "questionText": "Will ETH exceed 3000 USD by 2025-12-31?",
+    "oracle": "0x93561385F0192956036537804fc4E90307cE38F7",
+    "fee": 200,
+    "startTime": 1780046156,
+    "endTime": 1782638156
   }
 }

@@ -1,4 +1,4 @@
-import PredictionMarketFactory from '../../abis/PredictionMarketFactory.json'
+import PredictionMarketFactory from './PredictionMarketFactory.json'
 import Market from '../../abis/Market.json'
 import OrderBook from '../../abis/OrderBook.json'
 import MatchingEngine from '../../abis/MatchingEngine.json'
