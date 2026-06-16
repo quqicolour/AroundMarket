@@ -18,4 +18,13 @@ export const ABIs = {
   EchoOptimisticOracle: EchoOptimisticOracle.abi,
 } as const
 
-export { PredictionMarketFactory, Market, OrderBook, MatchingEngine, SettlementManager, ConditionalTokens, OracleAdapter, EchoOptimisticOracle }
+export {
+  PredictionMarketFactory,
+  Market,
+  OrderBook,
+  MatchingEngine,
+  SettlementManager,
+  ConditionalTokens,
+  OracleAdapter,
+  EchoOptimisticOracle,
+}

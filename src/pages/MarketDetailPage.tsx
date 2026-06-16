@@ -44,7 +44,7 @@ export default function MarketDetailPage() {
   }
 
   const m = marketData as any;
-  // Types.MarketData: [creator, market, collateral, conditionTokens, orderBook, matchingEngine, conditionId, startTime, endTime, resolved, fee]
+  // Types.MarketData: [creator, market, collateral, conditionTokens, orderBook, matchingEngine, conditionId, startTime, endTime, resolved, fee, question, dataSource]
   const creator       = Array.isArray(m) ? m[0]  : m.creator;
   const marketAddr    = Array.isArray(m) ? m[1]  : m.market;
   const collateral    = Array.isArray(m) ? m[2]  : m.collateral;
@@ -56,6 +56,8 @@ export default function MarketDetailPage() {
   const endTime      = Array.isArray(m) ? Number(m[8])  : Number(m.endTime);
   const resolved     = Array.isArray(m) ? m[9]  : m.resolved;
   const fee          = Array.isArray(m) ? Number(m[10]) : Number(m.fee);
+  const question     = (Array.isArray(m) ? m[11] : m.question)?.trim?.() || `Market #${id}`;
+  const dataSource   = (Array.isArray(m) ? m[12] : m.dataSource)?.trim?.() || "Data source not provided";
 
   if (!orderBookAddr || orderBookAddr === "0x0000000000000000000000000000000000000000") {
     return (
@@ -67,8 +69,8 @@ export default function MarketDetailPage() {
     );
   }
 
-  // Build marketData tuple for TradingForm: [creator, market, collateral, conditionTokens, orderBook, matchingEngine, conditionId, startTime, endTime, resolved, fee]
-  const marketDataTuple: any = [creator, marketAddr, collateral, conditionAddr, orderBookAddr, matchingEngineAddr, conditionId, startTime, endTime, resolved, fee];
+  // Build marketData tuple for TradingForm.
+  const marketDataTuple: any = [creator, marketAddr, collateral, conditionAddr, orderBookAddr, matchingEngineAddr, conditionId, startTime, endTime, resolved, fee, question, dataSource];
 
   const tabs: { key: TabType; label: string }[] = [
     { key: "chart", label: "Chart" },
@@ -111,10 +113,13 @@ export default function MarketDetailPage() {
                     </span>
                   )}
                 </div>
-                <h1 className="font-display" style={{ fontSize: 22, fontWeight: 600, color: "var(--text-primary)", fontFamily: "'Cormorant Garamond', Georgia, serif" }}>
-                  Market #{id}
+                <h1 className="font-display" style={{ fontSize: 28, fontWeight: 600, color: "var(--text-primary)", fontFamily: "'Cormorant Garamond', Georgia, serif", lineHeight: 1.12, maxWidth: 680 }}>
+                  {question}
                 </h1>
-                <p style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 2 }}>
+                <p style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 8, lineHeight: 1.55, maxWidth: 680 }}>
+                  Resolution source: {dataSource}
+                </p>
+                <p style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 6 }}>
                   {startTime > 0 && endTime > 0
                     ? `${new Date(startTime * 1000).toLocaleDateString()} – ${new Date(endTime * 1000).toLocaleDateString()}`
                     : "YES / NO Binary Prediction Market"}
@@ -185,25 +190,25 @@ export default function MarketDetailPage() {
               )}
               {activeTab === "orderbook" && (
                 <div style={{ padding: 16 }}>
-                  <OrderBookView marketId={id} orderBookAddr={orderBookAddr} />
+                  <OrderBookView marketId={id} orderBookAddr={orderBookAddr} collateralAddr={collateral} />
                 </div>
               )}
-              {activeTab === "myorders" && (
-                <div style={{ padding: 16 }}>
-                  <MyOrders orderBookAddr={orderBookAddr} />
-                </div>
-              )}
+ {activeTab === "myorders" && (
+ <div style={{ padding:16 }}>
+  <MyOrders orderBookAddr={orderBookAddr} marketAddr={marketAddr} marketId={id} collateralAddr={collateral} />
+ </div>
+ )}
             </div>
           </div>
 
           {/* Recent Trades — at the bottom */}
-          <RecentTrades marketId={id} matchingEngineAddr={matchingEngineAddr} />
+          <RecentTrades marketId={id} matchingEngineAddr={matchingEngineAddr} collateralAddr={collateral} />
         </div>
 
         {/* Right — sticky — TradingForm handles its own chart via KLineChart sub-component */}
         <div style={{ position: "sticky", top: 88 }}>
           {/* TradingForm now shows the ratio + K-line inline */}
-          <TradingFormWrapper marketData={marketDataTuple} />
+          <TradingFormWrapper marketData={marketDataTuple} marketId={id} />
         </div>
       </div>
     </div>
@@ -243,8 +248,8 @@ function InfoTileLink({ label, value, address, mono }: { label: string; value: s
   );
 }
 
-function TradingFormWrapper({ marketData }: { marketData: any }) {
-  return <TradingForm marketData={marketData} initialSide="yes" />;
+function TradingFormWrapper({ marketData, marketId }: { marketData: any; marketId: number }) {
+  return <TradingForm marketData={marketData} marketId={marketId} initialSide="yes" />;
 }
 
 function MarketDetailSkeleton() {

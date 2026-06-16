@@ -1,10 +1,12 @@
 import { useReadContract } from "wagmi";
 import { ABIs } from "../abis";
 import { formatPrice, formatAmount } from "../utils/format";
+import { ERC20_DECIMALS_ABI } from "../config/contractAbis";
 
 interface Props {
   marketId: number;
   matchingEngineAddr: string;
+  collateralAddr: string;
 }
 
 interface Trade {
@@ -15,7 +17,15 @@ interface Trade {
   taker: string;
 }
 
-export default function RecentTrades({ marketId, matchingEngineAddr }: Props) {
+export default function RecentTrades({ marketId, matchingEngineAddr, collateralAddr }: Props) {
+  const { data: collateralDecimalsRaw } = useReadContract({
+    abi: ERC20_DECIMALS_ABI,
+    address: collateralAddr as `0x${string}`,
+    functionName: "decimals",
+    query: { enabled: !!collateralAddr },
+  });
+  const collateralDecimals = Number(collateralDecimalsRaw ?? 18);
+
   const { data: tradesData, isLoading } = useReadContract({
     abi: ABIs.MatchingEngine,
     address: matchingEngineAddr as `0x${string}`,
@@ -62,7 +72,7 @@ export default function RecentTrades({ marketId, matchingEngineAddr }: Props) {
                 </span>
                 <span className="font-mono font-medium text-gray-800">{formatPrice(t.price)}</span>
                 <span className="text-gray-400">×</span>
-                <span className="font-mono text-gray-600">{formatAmount(t.amount)}</span>
+                <span className="font-mono text-gray-600">{formatAmount(t.amount, collateralDecimals)}</span>
                 <span className="flex-1 text-right text-gray-400 font-mono">{time}</span>
               </div>
             );

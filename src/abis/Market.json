@@ -10,28 +10,67 @@
     },
     {
       "inputs": [],
-      "name": "ReentrancyGuardReentrantCall",
+      "name": "AlreadyInitialized",
       "type": "error"
     },
     {
-      "inputs": [
-        {
-          "internalType": "address",
-          "name": "spender",
-          "type": "address"
-        },
-        {
-          "internalType": "uint256",
-          "name": "currentAllowance",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint256",
-          "name": "requestedDecrease",
-          "type": "uint256"
-        }
-      ],
-      "name": "SafeERC20FailedDecreaseAllowance",
+      "inputs": [],
+      "name": "BuySharesFOKNotFillable",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "BuySharesFOKNotFilledOnchain",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "BuySharesOnchainCostExceeded",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "BuySharesPreviewCostExceeded",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "CanNotCancel",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "EscrowOutcomeMismatch",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "EscrowUnderfilled",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "InvalidTimeRange",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "MarketNotActive",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "NotSettlementManager",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "NotYourOrder",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "ReentrancyGuardReentrantCall",
       "type": "error"
     },
     {
@@ -43,6 +82,16 @@
         }
       ],
       "name": "SafeERC20FailedOperation",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "SellSharesBelowMinReceive",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "SettlementManagerLookupFailed",
       "type": "error"
     },
     {
@@ -150,11 +199,100 @@
       "type": "event"
     },
     {
+      "anonymous": false,
       "inputs": [
         {
+          "indexed": true,
+          "internalType": "address",
+          "name": "maker",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "bool",
+          "name": "isYes",
+          "type": "bool"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint128",
+          "name": "price",
+          "type": "uint128"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint128",
+          "name": "amount",
+          "type": "uint128"
+        },
+        {
+          "indexed": true,
           "internalType": "uint64",
           "name": "orderId",
           "type": "uint64"
+        }
+      ],
+      "name": "ShareSellOrderPlaced",
+      "type": "event"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint128",
+          "name": "amount",
+          "type": "uint128"
+        }
+      ],
+      "name": "burnSharesForCollateral",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bool",
+          "name": "isYes",
+          "type": "bool"
+        },
+        {
+          "internalType": "uint128",
+          "name": "amount",
+          "type": "uint128"
+        },
+        {
+          "internalType": "uint128",
+          "name": "maxCost",
+          "type": "uint128"
+        },
+        {
+          "internalType": "bool",
+          "name": "fillOrKill",
+          "type": "bool"
+        }
+      ],
+      "name": "buyShares",
+      "outputs": [
+        {
+          "internalType": "uint128",
+          "name": "filled",
+          "type": "uint128"
+        },
+        {
+          "internalType": "uint128",
+          "name": "cost",
+          "type": "uint128"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint64[]",
+          "name": "orderIds",
+          "type": "uint64[]"
         }
       ],
       "name": "cancelOrder",
@@ -243,37 +381,44 @@
     {
       "inputs": [
         {
-          "internalType": "bool",
-          "name": "isYes",
-          "type": "bool"
-        },
-        {
-          "internalType": "uint128",
-          "name": "limitPrice",
-          "type": "uint128"
-        },
-        {
-          "internalType": "uint128",
-          "name": "amount",
-          "type": "uint128"
-        },
-        {
-          "internalType": "uint128",
-          "name": "minFill",
-          "type": "uint128"
+          "components": [
+            {
+              "internalType": "uint64",
+              "name": "marketId",
+              "type": "uint64"
+            },
+            {
+              "internalType": "bool",
+              "name": "isYes",
+              "type": "bool"
+            },
+            {
+              "internalType": "uint128",
+              "name": "limitPrice",
+              "type": "uint128"
+            },
+            {
+              "internalType": "uint128",
+              "name": "amount",
+              "type": "uint128"
+            }
+          ],
+          "internalType": "struct IMatchingEngine.TakerOrder[]",
+          "name": "orders",
+          "type": "tuple[]"
         }
       ],
-      "name": "fillOrder",
+      "name": "fillOrders",
       "outputs": [
         {
-          "internalType": "uint128",
-          "name": "filled",
-          "type": "uint128"
+          "internalType": "uint128[]",
+          "name": "filleds",
+          "type": "uint128[]"
         },
         {
-          "internalType": "uint128",
-          "name": "avgPrice",
-          "type": "uint128"
+          "internalType": "uint128[]",
+          "name": "avgPrices",
+          "type": "uint128[]"
         }
       ],
       "stateMutability": "nonpayable",
@@ -307,6 +452,11 @@
           "type": "uint64"
         },
         {
+          "internalType": "uint64",
+          "name": "_marketId",
+          "type": "uint64"
+        },
+        {
           "internalType": "contract IOrderBook",
           "name": "_orderBook",
           "type": "address"
@@ -329,15 +479,15 @@
     },
     {
       "inputs": [],
-      "name": "initialized",
+      "name": "marketId",
       "outputs": [
         {
-          "internalType": "bool",
+          "internalType": "uint64",
           "name": "",
-          "type": "bool"
+          "type": "uint64"
         }
       ],
-      "stateMutability": "pure",
+      "stateMutability": "view",
       "type": "function"
     },
     {
@@ -354,6 +504,92 @@
       "type": "function"
     },
     {
+      "inputs": [
+        {
+          "internalType": "uint128",
+          "name": "amount",
+          "type": "uint128"
+        }
+      ],
+      "name": "mintSharesViaCollateral",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256[]",
+          "name": "",
+          "type": "uint256[]"
+        },
+        {
+          "internalType": "uint256[]",
+          "name": "",
+          "type": "uint256[]"
+        }
+      ],
+      "name": "onERC1155BatchReceived",
+      "outputs": [
+        {
+          "internalType": "bytes4",
+          "name": "",
+          "type": "bytes4"
+        }
+      ],
+      "stateMutability": "pure",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bytes",
+          "name": "",
+          "type": "bytes"
+        }
+      ],
+      "name": "onERC1155Received",
+      "outputs": [
+        {
+          "internalType": "bytes4",
+          "name": "",
+          "type": "bytes4"
+        }
+      ],
+      "stateMutability": "pure",
+      "type": "function"
+    },
+    {
       "inputs": [],
       "name": "orderBook",
       "outputs": [
@@ -364,6 +600,24 @@
         }
       ],
       "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "name": "payoutCollateral",
+      "outputs": [],
+      "stateMutability": "nonpayable",
       "type": "function"
     },
     {
@@ -398,6 +652,35 @@
     {
       "inputs": [
         {
+          "internalType": "bool",
+          "name": "isYes",
+          "type": "bool"
+        },
+        {
+          "internalType": "uint128",
+          "name": "price",
+          "type": "uint128"
+        },
+        {
+          "internalType": "uint128",
+          "name": "amount",
+          "type": "uint128"
+        }
+      ],
+      "name": "placeSellOrder",
+      "outputs": [
+        {
+          "internalType": "uint64",
+          "name": "orderId",
+          "type": "uint64"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
           "internalType": "address",
           "name": "user",
           "type": "address"
@@ -406,6 +689,64 @@
       "name": "redeem",
       "outputs": [],
       "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bool",
+          "name": "isYes",
+          "type": "bool"
+        },
+        {
+          "internalType": "uint128",
+          "name": "amount",
+          "type": "uint128"
+        },
+        {
+          "internalType": "uint128",
+          "name": "minReceive",
+          "type": "uint128"
+        }
+      ],
+      "name": "sellShares",
+      "outputs": [
+        {
+          "internalType": "uint128",
+          "name": "collateralOut",
+          "type": "uint128"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint64",
+          "name": "",
+          "type": "uint64"
+        }
+      ],
+      "name": "shareSellEscrows",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "isShareSell",
+          "type": "bool"
+        },
+        {
+          "internalType": "uint8",
+          "name": "outcomeIndex",
+          "type": "uint8"
+        },
+        {
+          "internalType": "uint128",
+          "name": "remaining",
+          "type": "uint128"
+        }
+      ],
+      "stateMutability": "view",
       "type": "function"
     },
     {

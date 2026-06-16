@@ -182,7 +182,7 @@ export default function KLineChart({ width = 340, height = 200 }: Props) {
               <g key={i}>
                 <line x1={PAD_LEFT} y1={y} x2={width - PAD_RIGHT} y2={y} stroke="var(--border)" strokeWidth={0.5} strokeDasharray="3,3" />
                 <text x={PAD_LEFT - 2} y={y + 3} textAnchor="end" fontSize={9} fill="var(--text-tertiary)" fontFamily="'JetBrains Mono',monospace">
-                  {(p * 100).toFixed(1)}%
+                  {(p * 100).toFixed(2)}%
                 </text>
               </g>
             );

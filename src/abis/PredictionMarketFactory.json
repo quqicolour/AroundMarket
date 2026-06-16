@@ -114,6 +114,18 @@
           "internalType": "bytes32",
           "name": "conditionId",
           "type": "bytes32"
+        },
+        {
+          "indexed": false,
+          "internalType": "string",
+          "name": "question",
+          "type": "string"
+        },
+        {
+          "indexed": false,
+          "internalType": "string",
+          "name": "dataSource",
+          "type": "string"
         }
       ],
       "name": "MarketCreated",
@@ -200,6 +212,16 @@
           "internalType": "bytes32",
           "name": "conditionId",
           "type": "bytes32"
+        },
+        {
+          "internalType": "string",
+          "name": "question",
+          "type": "string"
+        },
+        {
+          "internalType": "string",
+          "name": "dataSource",
+          "type": "string"
         },
         {
           "internalType": "uint32",
@@ -307,6 +329,16 @@
               "internalType": "uint32",
               "name": "fee",
               "type": "uint32"
+            },
+            {
+              "internalType": "string",
+              "name": "question",
+              "type": "string"
+            },
+            {
+              "internalType": "string",
+              "name": "dataSource",
+              "type": "string"
             }
           ],
           "internalType": "struct Types.MarketData",
@@ -370,75 +402,6 @@
           "internalType": "address",
           "name": "",
           "type": "address"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "uint64",
-          "name": "",
-          "type": "uint64"
-        }
-      ],
-      "name": "markets",
-      "outputs": [
-        {
-          "internalType": "address",
-          "name": "creator",
-          "type": "address"
-        },
-        {
-          "internalType": "address",
-          "name": "market",
-          "type": "address"
-        },
-        {
-          "internalType": "address",
-          "name": "collateral",
-          "type": "address"
-        },
-        {
-          "internalType": "address",
-          "name": "conditionTokens",
-          "type": "address"
-        },
-        {
-          "internalType": "address",
-          "name": "orderBook",
-          "type": "address"
-        },
-        {
-          "internalType": "address",
-          "name": "matchingEngine",
-          "type": "address"
-        },
-        {
-          "internalType": "bytes32",
-          "name": "conditionId",
-          "type": "bytes32"
-        },
-        {
-          "internalType": "uint64",
-          "name": "startTime",
-          "type": "uint64"
-        },
-        {
-          "internalType": "uint64",
-          "name": "endTime",
-          "type": "uint64"
-        },
-        {
-          "internalType": "bool",
-          "name": "resolved",
-          "type": "bool"
-        },
-        {
-          "internalType": "uint32",
-          "name": "fee",
-          "type": "uint32"
         }
       ],
       "stateMutability": "view",
@@ -512,6 +475,24 @@
     {
       "inputs": [],
       "name": "renounceOwnership",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint64",
+          "name": "marketId",
+          "type": "uint64"
+        },
+        {
+          "internalType": "uint256[]",
+          "name": "payoutNumerators",
+          "type": "uint256[]"
+        }
+      ],
+      "name": "resolveMarket",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"

@@ -123,9 +123,12 @@ contract Market is ReentrancyGuard {
     ) external nonReentrant returns (uint64 orderId) {
         Errors._checkZeroAmount(amount);
         require(price > 0 && price <= 1e18, "M: invalid price");
-        require(block.timestamp >= startTime && block.timestamp <= endTime, "M: market not active");
+        require(
+            block.timestamp >= startTime && block.timestamp <= endTime,
+            "M: market not active"
+        );
 
-        uint256 cost = uint256(price) * amount;
+        uint256 cost = (uint256(price) * amount) / 1e18;
         collateral.safeTransferFrom(msg.sender, address(this), cost);
         _ensureAllowance(address(orderBook), cost);
 
@@ -147,7 +150,7 @@ contract Market is ReentrancyGuard {
         require(o.isActive && o.filled < o.amount, "M: cannot cancel");
 
         uint128 unfilled = o.amount - o.filled;
-        uint256 refund = uint256(unfilled) * o.price;
+        uint256 refund = (uint256(unfilled) * o.price) / 1e18;
 
         collateral.safeTransfer(msg.sender, refund);
         orderBook.cancelOrder(orderId);
@@ -177,7 +180,10 @@ contract Market is ReentrancyGuard {
         uint128 minFill
     ) external nonReentrant returns (uint128 filled, uint128 avgPrice) {
         Errors._checkZeroAmount(amount);
-        require(block.timestamp >= startTime && block.timestamp <= endTime, "M: market not active");
+        require(
+            block.timestamp >= startTime && block.timestamp <= endTime,
+            "M: market not active"
+        );
 
         // 1. Taker 预付（按 limitPrice 上限）
         uint256 takerPrepay = uint256(limitPrice) * amount;

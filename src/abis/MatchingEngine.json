@@ -4,23 +4,7 @@
   "sourceName": "contracts/core/MatchingEngine.sol",
   "abi": [
     {
-      "inputs": [
-        {
-          "internalType": "address",
-          "name": "_orderBook",
-          "type": "address"
-        },
-        {
-          "internalType": "address",
-          "name": "_collateral",
-          "type": "address"
-        },
-        {
-          "internalType": "address",
-          "name": "_feeRecipient",
-          "type": "address"
-        }
-      ],
+      "inputs": [],
       "stateMutability": "nonpayable",
       "type": "constructor"
     },
@@ -108,32 +92,6 @@
       "type": "event"
     },
     {
-      "inputs": [],
-      "name": "COLLATERAL",
-      "outputs": [
-        {
-          "internalType": "address",
-          "name": "",
-          "type": "address"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "ORDER_BOOK",
-      "outputs": [
-        {
-          "internalType": "address",
-          "name": "",
-          "type": "address"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
       "inputs": [
         {
           "internalType": "uint128",
@@ -157,6 +115,19 @@
           "internalType": "uint128",
           "name": "fee",
           "type": "uint128"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "collateralToken",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
         }
       ],
       "stateMutability": "view",
@@ -195,6 +166,29 @@
       "type": "function"
     },
     {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "_orderBook",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "_collateral",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "_feeRecipient",
+          "type": "address"
+        }
+      ],
+      "name": "init",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
       "inputs": [],
       "name": "makerFeeRate",
       "outputs": [
@@ -210,27 +204,34 @@
     {
       "inputs": [
         {
-          "internalType": "uint64",
-          "name": "marketId",
-          "type": "uint64"
-        },
-        {
-          "internalType": "bool",
-          "name": "isYes",
-          "type": "bool"
-        },
-        {
-          "internalType": "uint128",
-          "name": "limitPrice",
-          "type": "uint128"
-        },
-        {
-          "internalType": "uint128",
-          "name": "amount",
-          "type": "uint128"
+          "components": [
+            {
+              "internalType": "uint64",
+              "name": "marketId",
+              "type": "uint64"
+            },
+            {
+              "internalType": "bool",
+              "name": "isYes",
+              "type": "bool"
+            },
+            {
+              "internalType": "uint128",
+              "name": "limitPrice",
+              "type": "uint128"
+            },
+            {
+              "internalType": "uint128",
+              "name": "amount",
+              "type": "uint128"
+            }
+          ],
+          "internalType": "struct IMatchingEngine.TakerOrder[]",
+          "name": "orders",
+          "type": "tuple[]"
         }
       ],
-      "name": "matchOrder",
+      "name": "matchOrders",
       "outputs": [
         {
           "components": [
@@ -255,17 +256,30 @@
               "type": "uint128"
             }
           ],
-          "internalType": "struct IOrderBook.Fill[]",
-          "name": "fills",
-          "type": "tuple[]"
+          "internalType": "struct IOrderBook.Fill[][]",
+          "name": "results",
+          "type": "tuple[][]"
         },
         {
-          "internalType": "uint128",
-          "name": "totalFilled",
-          "type": "uint128"
+          "internalType": "uint128[]",
+          "name": "totalFilleds",
+          "type": "uint128[]"
         }
       ],
       "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "orderBook",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
       "type": "function"
     },
     {

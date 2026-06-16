@@ -3,7 +3,7 @@ import TxToast from "./TxToast";
 
 interface TxToastValue {
   showPending: (hash: string, label: string) => void;
-  showSuccess: (label: string, explorerUrl?: string) => void;
+  showSuccess: (label: string, hashOrUrl?: string) => void;
   showError: (msg: string) => void;
 }
 
@@ -20,13 +20,22 @@ export function TxToastProvider({ children }: { children: React.ReactNode }) {
     explorerUrl: string;
   } | null>(null);
 
-  const showPending = useCallback((hash: string, label: string) => {
-    setToast({ status: "pending", label, explorerUrl: `https://testnet.arcscan.io/tx/${hash}` });
-  }, []);
+  const txUrl = useCallback((hash: string) => `https://testnet.arcscan.io/tx/${hash}`, []);
 
-  const showSuccess = useCallback((label: string, explorerUrl?: string) => {
-    setToast({ status: "success", label, explorerUrl: explorerUrl ?? "" });
-  }, []);
+  const normalizeExplorerUrl = useCallback((hashOrUrl?: string) => {
+    if (!hashOrUrl) return "";
+    if (hashOrUrl.startsWith("http://") || hashOrUrl.startsWith("https://")) return hashOrUrl;
+    if (hashOrUrl.startsWith("0x")) return txUrl(hashOrUrl);
+    return hashOrUrl;
+  }, [txUrl]);
+
+  const showPending = useCallback((hash: string, label: string) => {
+    setToast({ status: "pending", label, explorerUrl: txUrl(hash) });
+  }, [txUrl]);
+
+  const showSuccess = useCallback((label: string, hashOrUrl?: string) => {
+    setToast({ status: "success", label, explorerUrl: normalizeExplorerUrl(hashOrUrl) });
+  }, [normalizeExplorerUrl]);
 
   const showError = useCallback((msg: string) => {
     setToast({ status: "error", label: msg, explorerUrl: "" });

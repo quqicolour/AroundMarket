@@ -1,26 +1,26 @@
 {
   "network": "arc_testnet",
-  "timestamp": "2026-05-29T09:16:11.609Z",
+  "chainId": 5042002,
   "deployer": "0x93561385F0192956036537804fc4E90307cE38F7",
-  "collateral": "0x8ec174Ef35f9dEAbe5F24Bd95331Db049066ECAA",
-  "contracts": {
-    "ConditionalTokens": "0x83113DA858c644C3d0b2619bc28dAc57A666ADB9",
-    "SettlementManager": "0xD89DDFDF5c6F60B284923E499c703346D2eAB540",
-    "OrderBookTemplate": "0x02B145b19e77fd448Ee52939AE6b37DeFA3dFa14",
-    "MatchingEngineTemplate": "0x21CEfF3271Fb307BB40151e39890FDB7b234e2Ab",
-    "MarketTemplate": "0x6E120b81bAFdC091AE4B1ea1EaEFc66e993cc353",
-    "PredictionMarketFactory": "0xDF708c771BD041e605d9F95C66dC02f15dF3cF5C"
+  "timestamp": "2026-06-16T03:25:35.146Z",
+  "core": {
+    "collateral": "0x47b67D03B0093D95C4591974569d3ee738c97Bb3",
+    "conditionalTokens": "0x8c6eAfb47C562f849393d8eD576bB03a6763522a",
+    "orderBookImpl": "0x3067FE44121cea86AA75D7aC43eBC1e3eD92719d",
+    "matchingEngineImpl": "0x4E1c9EBEe8342B45B9f3444D3750b8C6Dfac73Df",
+    "marketImpl": "0x03C47455AFaf87e4f75d7377Fe3d96290232c96A",
+    "settlementManager": "0xD5Cce848954Ab6370Cf34FED6F850Ada20A5Eb51"
   },
-  "firstMarket": {
-    "marketId": "1",
-    "market": "0xc25F44107a32dac6695f263bCDaB335c7d01A57c",
-    "collateral": "0x8ec174Ef35f9dEAbe5F24Bd95331Db049066ECAA",
-    "conditionId": "0x7f19fe3ca8d530012b4aee1f497d6434afd7d15f67f86edcbc3cb48a4e2b5900",
-    "questionId": "0x48bd5593dc165414c29346194fa540cc077c934bd3221b26c6933c6d3e198521",
-    "questionText": "Will ETH exceed 3000 USD by 2025-12-31?",
-    "oracle": "0x93561385F0192956036537804fc4E90307cE38F7",
-    "fee": 200,
-    "startTime": 1780046156,
-    "endTime": 1782638156
+  "factory": "0x466a2D6030A51A804Fc3DBDa1b98b6559f51D6Cc",
+  "feeRecipient": "0x93561385F0192956036537804fc4E90307cE38F7",
+  "exampleMarket": {
+    "marketId": 1,
+    "market": "0x20C74ba29A19a6479446C469032ac4f27c1F4DBC",
+    "questionId": "0xb58ae9daf5c74c2de9fe2e27f0cea77554ce1f3a656b7713265960bdd426429b",
+    "question": "Will ETH close above 5000 USD by the end of 2026?",
+    "dataSource": "Chainlink ETH/USD and configured oracle",
+    "startTime": 1781580391,
+    "endTime": 1782185191,
+    "txHash": "0xadca59bff4c277deba59d957fb2fc60ec5df6181f2dd2fe1483a627cdc763dc3"
   }
 }

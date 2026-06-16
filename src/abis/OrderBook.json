@@ -92,6 +92,38 @@
     {
       "inputs": [
         {
+          "internalType": "address",
+          "name": "market",
+          "type": "address"
+        }
+      ],
+      "name": "authorizeMarket",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "authorizedMarkets",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
           "internalType": "uint64",
           "name": "",
           "type": "uint64"
@@ -130,9 +162,9 @@
     {
       "inputs": [
         {
-          "internalType": "uint64",
-          "name": "orderId",
-          "type": "uint64"
+          "internalType": "uint64[]",
+          "name": "orderIds",
+          "type": "uint64[]"
         }
       ],
       "name": "cancelOrder",
@@ -143,33 +175,18 @@
     {
       "inputs": [
         {
-          "internalType": "uint64",
-          "name": "marketId",
-          "type": "uint64"
-        },
-        {
-          "internalType": "bool",
-          "name": "isYes",
-          "type": "bool"
-        },
-        {
-          "internalType": "uint128",
-          "name": "limitPrice",
-          "type": "uint128"
-        },
-        {
-          "internalType": "uint128",
-          "name": "amount",
-          "type": "uint128"
-        },
-        {
-          "internalType": "uint128",
-          "name": "minFill",
-          "type": "uint128"
+          "internalType": "address",
+          "name": "market",
+          "type": "address"
         }
       ],
-      "name": "executeOrderWithMinFill",
-      "outputs": [
+      "name": "deauthorizeMarket",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
         {
           "components": [
             {
@@ -198,6 +215,8 @@
           "type": "tuple[]"
         }
       ],
+      "name": "fillOrders",
+      "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
     },
@@ -268,6 +287,62 @@
           "internalType": "uint128",
           "name": "totalAmount",
           "type": "uint128"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint64",
+          "name": "marketId",
+          "type": "uint64"
+        },
+        {
+          "internalType": "bool",
+          "name": "isYes",
+          "type": "bool"
+        },
+        {
+          "internalType": "uint128",
+          "name": "limitPrice",
+          "type": "uint128"
+        },
+        {
+          "internalType": "uint128",
+          "name": "amount",
+          "type": "uint128"
+        }
+      ],
+      "name": "getFills",
+      "outputs": [
+        {
+          "components": [
+            {
+              "internalType": "uint64",
+              "name": "orderId",
+              "type": "uint64"
+            },
+            {
+              "internalType": "address",
+              "name": "maker",
+              "type": "address"
+            },
+            {
+              "internalType": "uint128",
+              "name": "amount",
+              "type": "uint128"
+            },
+            {
+              "internalType": "uint128",
+              "name": "price",
+              "type": "uint128"
+            }
+          ],
+          "internalType": "struct IOrderBook.Fill[]",
+          "name": "fills",
+          "type": "tuple[]"
         }
       ],
       "stateMutability": "view",
@@ -418,6 +493,13 @@
     },
     {
       "inputs": [],
+      "name": "init",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
       "name": "nextOrderId",
       "outputs": [
         {
@@ -491,6 +573,11 @@
     {
       "inputs": [
         {
+          "internalType": "address",
+          "name": "maker",
+          "type": "address"
+        },
+        {
           "internalType": "uint64",
           "name": "marketId",
           "type": "uint64"
@@ -533,24 +620,14 @@
           "internalType": "bool",
           "name": "",
           "type": "bool"
-        },
-        {
-          "internalType": "uint128",
-          "name": "",
-          "type": "uint128"
-        },
+        }
+      ],
+      "name": "priceBitmap",
+      "outputs": [
         {
           "internalType": "uint256",
           "name": "",
           "type": "uint256"
-        }
-      ],
-      "name": "priceOrders",
-      "outputs": [
-        {
-          "internalType": "uint64",
-          "name": "",
-          "type": "uint64"
         }
       ],
       "stateMutability": "view",
@@ -572,14 +649,19 @@
           "internalType": "uint256",
           "name": "",
           "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
         }
       ],
-      "name": "sortedPrices",
+      "name": "priceOrders",
       "outputs": [
         {
-          "internalType": "uint128",
+          "internalType": "uint64",
           "name": "",
-          "type": "uint128"
+          "type": "uint64"
         }
       ],
       "stateMutability": "view",

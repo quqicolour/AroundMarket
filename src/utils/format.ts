@@ -6,7 +6,7 @@ export function formatPrice(price: bigint, precision = 18): string {
   return `${integer}.${fractionStr}`;
 }
 
-export function formatAmount(amount: bigint, decimals = 6): string {
+export function formatAmount(amount: bigint, decimals = 18): string {
   const div = 10n ** BigInt(decimals);
   const val = Number(amount) / Number(div);
   if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(2)}M`;
@@ -25,7 +25,7 @@ export function parsePrice(input: string): bigint {
   return BigInt(Math.round(val * 1e18));
 }
 
-export function parseAmount(input: string, decimals = 6): bigint {
+export function parseAmount(input: string, decimals = 18): bigint {
   const [int, frac = ""] = input.split(".");
   const padded = int + frac.padEnd(decimals, "0").slice(0, decimals);
   return BigInt(padded);

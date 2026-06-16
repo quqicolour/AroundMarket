@@ -1,44 +1,39 @@
-import { useState } from 'react'
-import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, NavLink, useLocation } from 'react-router-dom'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import HomePage from './pages/HomePage'
+import MarketsPage from './pages/MarketsPage'
 import MyPage from './pages/MyPage'
+import CreateMarketPage from './pages/CreateMarketPage'
 import MarketDetailPage from './pages/MarketDetailPage'
-import CreateMarketModal from './components/CreateMarketModal'
 import { TxToastProvider } from './components/TxToastContext'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import './styles/index.css'
 
 export default function App() {
-  const [showCreateModal, setShowCreateModal] = useState(false)
-
   return (
     <TxToastProvider>
       <BrowserRouter>
         <div className="min-h-screen" style={{ background: 'var(--bg-base)' }}>
-          <Header onCreateMarket={() => setShowCreateModal(true)} />
+          <Header />
           <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
             <ErrorBoundary>
               <Routes>
                 <Route path="/" element={<HomePage />} />
+                <Route path="/markets" element={<MarketsPage />} />
+                <Route path="/create" element={<CreateMarketPage />} />
                 <Route path="/my" element={<MyPage />} />
                 <Route path="/market/:marketId" element={<MarketDetailPage />} />
               </Routes>
             </ErrorBoundary>
           </main>
-
-          <CreateMarketModal
-            isOpen={showCreateModal}
-            onClose={() => setShowCreateModal(false)}
-          />
         </div>
       </BrowserRouter>
     </TxToastProvider>
   )
 }
 
-function Header({ onCreateMarket }: { onCreateMarket: () => void }) {
-  const location = typeof window !== 'undefined' ? window.location.pathname : '/'
+function Header() {
+  const location = useLocation()
 
   return (
     <header className="sticky top-0 z-50 header-glass">
@@ -60,17 +55,27 @@ function Header({ onCreateMarket }: { onCreateMarket: () => void }) {
         <nav className="flex items-center gap-1.5">
           <NavLink
             to="/"
-            style={() => location === '/' ? activeNavStyle : navStyle}
+            style={() => location.pathname === '/' ? activeNavStyle : navStyle}
             className="hidden sm:flex items-center gap-1.5"
           >
             <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
             </svg>
+            Home
+          </NavLink>
+          <NavLink
+            to="/markets"
+            style={() => location.pathname === '/markets' || location.pathname.startsWith('/market/') ? activeNavStyle : navStyle}
+            className="hidden sm:flex items-center gap-1.5"
+          >
+            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path d="M4 19V5M4 19h16M8 16V9M13 16V7M18 16v-4"/>
+            </svg>
             Markets
           </NavLink>
           <NavLink
             to="/my"
-            style={() => location === '/my' ? activeNavStyle : navStyle}
+            style={() => location.pathname === '/my' ? activeNavStyle : navStyle}
             className="hidden sm:flex items-center gap-1.5"
           >
             <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -78,28 +83,26 @@ function Header({ onCreateMarket }: { onCreateMarket: () => void }) {
             </svg>
             Portfolio
           </NavLink>
-          <button
-            type="button"
-            onClick={onCreateMarket}
-            style={createBtnStyle}
-            className="hidden sm:flex items-center gap-1.5 text-sm"
+          <NavLink
+            to="/create"
+            style={() => location.pathname === '/create' ? activeNavStyle : navStyle}
+            className="hidden sm:flex items-center gap-1.5"
           >
             <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
               <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
-            Create Market
-          </button>
-          <button
-            type="button"
-            onClick={onCreateMarket}
-            style={createBtnStyle}
+            Create
+          </NavLink>
+          <NavLink
+            to="/create"
+            style={() => location.pathname === '/create' ? activeNavStyle : navStyle}
             className="sm:hidden !px-3 !py-2"
-            title="Create Market"
+            title="Create"
           >
             <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
               <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
-          </button>
+          </NavLink>
         </nav>
 
         <div className="flex-shrink-0">
@@ -141,18 +144,4 @@ const activeNavStyle = {
   background: 'var(--primary-light)',
   border: '1px solid var(--yes-border)',
   transition: 'all 150ms ease',
-}
-
-const createBtnStyle = {
-  background: 'var(--primary)',
-  color: 'white',
-  border: 'none',
-  borderRadius: 10,
-  padding: '8px 16px',
-  fontWeight: 600,
-  fontSize: 14,
-  cursor: 'pointer',
-  boxShadow: '0 2px 8px rgba(16,185,129,0.25)',
-  transition: 'all 150ms ease',
-  marginLeft: 8,
 }
