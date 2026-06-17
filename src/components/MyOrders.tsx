@@ -1,13 +1,12 @@
 import { useEffect } from "react";
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { ABIs } from "../abis";
 import { useTxToast } from "./TxToastContext";
 import { Loader2, X, Hash } from "lucide-react";
 import { ERC20_DECIMALS_ABI } from "../config/contractAbis";
 import { unitsToNumber } from "../utils/tradingMath";
+import { SubgraphLimitOrder, useSubgraphUserOrders } from "../utils/subgraph";
 
 interface Props {
- orderBookAddr: string;
  marketAddr: string;
  marketId: number;
  collateralAddr: string;
@@ -15,19 +14,12 @@ interface Props {
 
 // OrderData struct from ABI: id, marketId, maker, isYes, price, amount, filled, timestamp, isActive
 // 合约语义: amount = CTF shares with collateral decimals, price = 1e18
-export default function MyOrders({ orderBookAddr, marketAddr, marketId, collateralAddr }: Props) {
+export default function MyOrders({ marketAddr, marketId, collateralAddr }: Props) {
  const { address, isConnected } = useAccount();
  const { showPending, showSuccess, showError } = useTxToast();
 
- const { data: orderIds, isLoading: idsLoading, refetch: refetchOrders } = useReadContract({
- abi: ABIs.OrderBook,
- address: orderBookAddr as `0x${string}`,
- functionName: "getUserOrders",
- args: [address as `0x${string}`, BigInt(marketId)],
- query: { enabled: !!address && !!orderBookAddr },
- });
+ const { data: orders = [], isLoading: ordersLoading, refetch: refetchOrders } = useSubgraphUserOrders(marketId, address);
 
-  const orderIdList = (orderIds as bigint[] | undefined) ?? [];
   const { data: collateralDecimalsRaw } = useReadContract({
   abi: ERC20_DECIMALS_ABI,
   address: collateralAddr as `0x${string}`,
@@ -35,15 +27,6 @@ export default function MyOrders({ orderBookAddr, marketAddr, marketId, collater
   query: { enabled: !!collateralAddr },
   });
   const collateralDecimals = Number(collateralDecimalsRaw ??18);
-
- console.log("[MyOrders]", {
- user: address,
- marketId,
- orderBookAddr,
- marketAddr,
- orderCount: orderIdList.length,
- orderIds: orderIdList.map(x => x.toString()),
- });
 
  // Cancel mutation
  const { writeContract: writeCancel, data: cancelTxHash, isPending: cancelPending, error: cancelWriteError } = useWriteContract();
@@ -107,7 +90,7 @@ export default function MyOrders({ orderBookAddr, marketAddr, marketId, collater
  );
  }
 
- if (idsLoading) {
+ if (ordersLoading) {
  return (
  <div className="space-y-2">
  {[1, 2, 3].map(i => (
@@ -117,7 +100,7 @@ export default function MyOrders({ orderBookAddr, marketAddr, marketId, collater
  );
  }
 
- if (orderIdList.length === 0) {
+ if (orders.length === 0) {
  return (
  <div className="text-center py-16 text-gray-400">
  <div className="text-3xl mb-2 opacity-30">📝</div>
@@ -128,12 +111,10 @@ export default function MyOrders({ orderBookAddr, marketAddr, marketId, collater
 
  return (
  <div className="space-y-2">
- {orderIdList.map((oid) => (
+ {orders.map((order) => (
  <MyOrderRow
- key={String(oid)}
- orderId={oid}
- orderBookAddr={orderBookAddr}
-  marketId={marketId}
+ key={order.id}
+ order={order}
   collateralDecimals={collateralDecimals}
   onCancel={handleCancel}
  disabled={cancelPending || cancelConfirming}
@@ -145,68 +126,45 @@ export default function MyOrders({ orderBookAddr, marketAddr, marketId, collater
 
 // ── Single Order Row ──────────────────────────────────────────────────────────
 function MyOrderRow({
- orderId,
- orderBookAddr,
+ order,
  collateralDecimals,
  onCancel,
  disabled,
 }: {
- orderId: bigint;
- orderBookAddr: string;
- marketId: number;
+ order: SubgraphLimitOrder;
  collateralDecimals: number;
  onCancel: (id: bigint) => void;
  disabled: boolean;
 }) {
- const { data: order, isLoading } = useReadContract({
- abi: ABIs.OrderBook,
- address: orderBookAddr as `0x${string}`,
- functionName: "getOrder",
- args: [orderId],
- query: { enabled: !!orderBookAddr },
- });
-
- if (isLoading || !order) {
- return <div className="h-14 bg-gray-100 rounded-xl animate-pulse" />;
- }
-
- const o = order as {
- id: bigint;
- maker: string;
- isYes: boolean;
- price: bigint;
- amount: bigint;
- filled: bigint;
- timestamp: bigint;
- isActive: boolean;
- };
-
-  const remaining = o.amount > 0n ? o.amount - o.filled : 0n;
-  const filledPct = o.amount > 0n ? Number((o.filled * 100n) / o.amount) : 0;
-  const priceCents = (Number(o.price) / 1e16); // 1e18 → cents
+  const orderId = BigInt(order.orderId);
+  const amount = BigInt(order.amount);
+  const filled = BigInt(order.filled);
+  const remaining = BigInt(order.remaining);
+  const filledPct = amount > 0n ? Number((filled * 100n) / amount) : 0;
+  const priceCents = (Number(order.price) / 1e16); // 1e18 → cents
   const amountShares = unitsToNumber(remaining, collateralDecimals).toFixed(2);
 
  // 状态: active & 有剩余 → 可取消; filled=amount → 全部成交; !isActive → 已取消
  const isFullyFilled = remaining === 0n;
- const isCancelled = !o.isActive;
- const isCancellable = o.isActive && remaining > 0n;
+ const isCancelled = order.status === "CANCELLED";
+ const isCancellable = (order.status === "ACTIVE" || order.status === "PARTIALLY_FILLED") && remaining > 0n;
 
  return (
  <div
  className="flex items-center justify-between py-2.5 px-3 rounded-lg border transition-colors"
  style={{
- background: o.isYes ? "rgba(16,185,129,0.04)" : "rgba(244,63,94,0.04)",
- borderColor: o.isYes ? "rgba(16,185,129,0.15)" : "rgba(244,63,94,0.15)",
+ background: order.isYes ? "rgba(16,185,129,0.04)" : "rgba(244,63,94,0.04)",
+ borderColor: order.isYes ? "rgba(16,185,129,0.15)" : "rgba(244,63,94,0.15)",
  opacity: isCancelled ? 0.55 : 1,
  }}
  >
  <div className="flex items-center gap-2.5 min-w-0">
  <span
  className={`text-xs font-bold px-2 py-0.5 rounded-md ${
- o.isYes ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+ order.isYes ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
  }`}
  >
- {o.isYes ? "YES" : "NO"}
+ {order.isYes ? "YES" : "NO"}
  </span>
  <span className="text-sm font-mono font-semibold text-gray-800">
  {priceCents.toFixed(0)}¢
@@ -234,7 +192,7 @@ function MyOrderRow({
  <div className="flex items-center gap-1.5 shrink-0">
  <span className="text-[10px] text-gray-400 font-mono flex items-center gap-1">
  <Hash size={9} />
- {String(o.id).slice(-4)}
+ {order.orderId.slice(-4)}
  </span>
  {isCancellable && (
  <button

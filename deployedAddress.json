@@ -2,25 +2,25 @@
   "network": "arc_testnet",
   "chainId": 5042002,
   "deployer": "0x93561385F0192956036537804fc4E90307cE38F7",
-  "timestamp": "2026-06-16T03:25:35.146Z",
+  "timestamp": "2026-06-17T06:44:07.110Z",
   "core": {
-    "collateral": "0x47b67D03B0093D95C4591974569d3ee738c97Bb3",
-    "conditionalTokens": "0x8c6eAfb47C562f849393d8eD576bB03a6763522a",
-    "orderBookImpl": "0x3067FE44121cea86AA75D7aC43eBC1e3eD92719d",
-    "matchingEngineImpl": "0x4E1c9EBEe8342B45B9f3444D3750b8C6Dfac73Df",
-    "marketImpl": "0x03C47455AFaf87e4f75d7377Fe3d96290232c96A",
-    "settlementManager": "0xD5Cce848954Ab6370Cf34FED6F850Ada20A5Eb51"
+    "collateral": "0xAa080805663D0aaD1714B9910f2291658E2D24a0",
+    "conditionalTokens": "0xD91517C321847AFB18cacf02D5305aeBc6eF8c38",
+    "orderBookImpl": "0xe9dE1D7bbB5Fd7aC39136551ACbB3Ba3f090f237",
+    "matchingEngineImpl": "0x3a655c916866B5F19E055C096aC03df19317d2d4",
+    "marketImpl": "0x54D3e55d2Dc5A702dbdfc064D8A0881364B85101",
+    "settlementManager": "0x3b75a482A2F0DAdB39CA2569dD1e9D25EfA391D8"
   },
-  "factory": "0x466a2D6030A51A804Fc3DBDa1b98b6559f51D6Cc",
+  "factory": "0xD316E250a5696ff1Ae2a002F1D3cD8c3FdB313ab",
   "feeRecipient": "0x93561385F0192956036537804fc4E90307cE38F7",
   "exampleMarket": {
     "marketId": 1,
-    "market": "0x20C74ba29A19a6479446C469032ac4f27c1F4DBC",
-    "questionId": "0xb58ae9daf5c74c2de9fe2e27f0cea77554ce1f3a656b7713265960bdd426429b",
+    "market": "0x96EaEF1e6Ed270e675152f40F5c3532c8dA5612C",
+    "questionId": "0x935a3fb610f534bfbe56c61260ca50f8c972a161cf5ab1f393033a49cbb0ab3f",
     "question": "Will ETH close above 5000 USD by the end of 2026?",
     "dataSource": "Chainlink ETH/USD and configured oracle",
-    "startTime": 1781580391,
-    "endTime": 1782185191,
-    "txHash": "0xadca59bff4c277deba59d957fb2fc60ec5df6181f2dd2fe1483a627cdc763dc3"
+    "startTime": 1781678704,
+    "endTime": 1782283504,
+    "txHash": "0x79bc3e02f749b6651d71ac0f900e141de78b196cabcb9c4b4edef5130ade275d"
   }
 }

@@ -1,77 +1,27 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { useReadContract } from "wagmi";
-import { ABIs } from "../abis";
-import { CONTRACTS } from "../config/contracts";
 import { formatAddress } from "../utils/format";
+import { getMarketTimingStatus, useUnixNow } from "../utils/marketTime";
+import { bestAsk, bestBid, SubgraphMarket, useSubgraphMarketOrders } from "../utils/subgraph";
 import { formatProbabilityPercent, priceWeiToPercent } from "../utils/tradingMath";
 
-interface MarketData {
-  creator: string;
-  market: string;
-  collateral: string;
-  conditionTokens: string;
-  orderBook: string;
-  matchingEngine: string;
-  conditionId: string;
-  startTime: bigint;
-  endTime: bigint;
-  resolved: boolean;
-  fee: bigint;
-  question?: string;
-  dataSource?: string;
-}
-
-function isMarketValid(data: MarketData | undefined | null): boolean {
-  if (!data) return false;
-  return data.orderBook !== "0x0000000000000000000000000000000000000000";
-}
-
-export default function MarketCard({ marketId }: { marketId: number }) {
+export default function MarketCard({ market }: { market: SubgraphMarket }) {
   const [expanded, setExpanded] = useState(false);
 
-  const {
-    data: rawMarketData,
-    isLoading,
-    error,
-  } = useReadContract({
-    abi: ABIs.PredictionMarketFactory,
-    address: CONTRACTS.PredictionMarketFactory,
-    functionName: "getMarket",
-    args: [BigInt(marketId)],
-    query: { retry: false },
-  });
+  const marketId = Number(market.marketId);
+  const question = market.question?.trim() || `Market #${marketId}`;
+  const dataSource = market.dataSource?.trim() || "Data source not provided";
+  const startTime = Number(market.startTime || 0);
+  const endTime = Number(market.endTime || 0);
+  const nowTime = useUnixNow();
+  const timing = getMarketTimingStatus(startTime, endTime, market.resolved, nowTime);
 
-  const marketData = rawMarketData as MarketData | undefined;
-  const valid = isMarketValid(marketData);
-  const orderBookAddr = valid ? marketData!.orderBook : undefined;
-  const resolved = valid ? marketData!.resolved : false;
-  const question = marketData?.question?.trim() || `Market #${marketId}`;
-  const dataSource = marketData?.dataSource?.trim() || "Data source not provided";
-  const startTime = marketData?.startTime ? Number(marketData.startTime) : 0;
-  const endTime = marketData?.endTime ? Number(marketData.endTime) : 0;
+  const { data: orders = [] } = useSubgraphMarketOrders(marketId);
+  const yesBestBid = bestBid(orders);
+  const noBestAsk = bestAsk(orders);
 
-  const { data: bestBid } = useReadContract({
-    abi: ABIs.OrderBook,
-    address: orderBookAddr as `0x${string}`,
-    functionName: "getBestBid",
-    args: [BigInt(marketId)],
-    query: { enabled: valid && !!orderBookAddr, retry: false },
-  });
-
-  const { data: bestAsk } = useReadContract({
-    abi: ABIs.OrderBook,
-    address: orderBookAddr as `0x${string}`,
-    functionName: "getBestAsk",
-    args: [BigInt(marketId)],
-    query: { enabled: valid && !!orderBookAddr, retry: false },
-  });
-
-  const yesPct = bestBid ? priceWeiToPercent(bestBid as bigint) : null;
-  const noPct = bestAsk ? priceWeiToPercent(bestAsk as bigint) : null;
-
-  if (isLoading) return <MarketCardSkeleton />;
-  if (error || !valid) return null;
+  const yesPct = yesBestBid ? priceWeiToPercent(yesBestBid) : null;
+  const noPct = noBestAsk ? priceWeiToPercent(noBestAsk) : null;
 
   return (
     <Link to={`/market/${marketId}`} style={{ textDecoration: "none" }}>
@@ -93,7 +43,7 @@ export default function MarketCard({ marketId }: { marketId: number }) {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={resolved ? statusDotMuted : statusDotLive} />
+            <div style={timing.kind === "active" ? statusDotLive : statusDotMuted} />
             <span
               style={{
                 fontSize: 11,
@@ -110,14 +60,14 @@ export default function MarketCard({ marketId }: { marketId: number }) {
               borderRadius: 8,
               fontSize: 11,
               fontWeight: 700,
-              background: resolved
-                ? "var(--bg-elevated)"
-                : "var(--primary-light)",
-              color: resolved ? "var(--text-tertiary)" : "var(--primary-text)",
-              border: `1px solid ${resolved ? "var(--border)" : "var(--yes-border)"}`,
+              background: timing.kind === "active"
+                ? "var(--primary-light)"
+                : "var(--bg-elevated)",
+              color: timing.kind === "active" ? "var(--primary-text)" : "var(--text-tertiary)",
+              border: `1px solid ${timing.kind === "active" ? "var(--yes-border)" : "var(--border)"}`,
             }}
           >
-            {resolved ? "Resolved" : "Active"}
+            {timing.statusLabel}
           </div>
         </div>
 
@@ -170,15 +120,31 @@ export default function MarketCard({ marketId }: { marketId: number }) {
             justifyContent: "space-between",
             paddingTop: 12,
             borderTop: "1px solid var(--border-subtle)",
+            gap: 10,
           }}
         >
-          <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "'JetBrains Mono', monospace" }}>
-            {endTime > 0
-              ? `Ends ${new Date(endTime * 1000).toLocaleDateString()}`
-              : "Order book depth"}
-          </span>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 3,
+              minWidth: 0,
+              padding: "7px 10px",
+              borderRadius: 8,
+              background: "var(--bg-elevated)",
+              border: "1px solid var(--border)",
+              borderLeft: `3px solid ${timing.kind === "active" ? "var(--primary)" : timing.kind === "awaiting" ? "var(--warning)" : "var(--border-strong)"}`,
+            }}
+          >
+            <span style={{ fontSize: 9, fontWeight: 800, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: 0 }}>
+              Market Time
+            </span>
+            <span style={{ fontSize: 12, color: timing.kind === "active" ? "var(--primary-text)" : timing.kind === "awaiting" ? "var(--warning)" : "var(--text-secondary)", fontWeight: 800, fontFamily: "'JetBrains Mono', monospace" }}>
+              {timing.countdownLabel}
+            </span>
+          </div>
           <span
-            style={{ fontSize: 12, fontWeight: 600, color: "var(--primary)" }}
+            style={{ fontSize: 12, fontWeight: 600, color: "var(--primary)", whiteSpace: "nowrap" }}
           >
             Trade →
           </span>
@@ -197,7 +163,7 @@ export default function MarketCard({ marketId }: { marketId: number }) {
           >
             <DetailRow
               label="Collateral"
-              value={formatAddress(marketData!.collateral, 6)}
+              value={formatAddress(market.collateral, 6)}
             />
             <DetailRow
               label="Start"
@@ -205,17 +171,22 @@ export default function MarketCard({ marketId }: { marketId: number }) {
               mono={false}
             />
             <DetailRow
-              label="End"
-              value={endTime > 0 ? new Date(endTime * 1000).toLocaleString() : "Pending"}
+              label="Countdown"
+              value={timing.countdownLabel}
+              mono={false}
+            />
+            <DetailRow
+              label="Settlement"
+              value={timing.settlementLabel}
               mono={false}
             />
             <DetailRow
               label="Order Book"
-              value={formatAddress(marketData!.orderBook, 6)}
+              value={formatAddress(market.orderBook, 6)}
             />
             <DetailRow
               label="Condition ID"
-              value={formatAddress(marketData!.conditionId ?? "", 8)}
+              value={formatAddress(market.conditionId ?? "", 8)}
             />
           </div>
         )}
@@ -307,80 +278,6 @@ const statusDotMuted: React.CSSProperties = {
   borderRadius: "50%",
   background: "var(--text-tertiary)",
 };
-
-function MarketCardSkeleton() {
-  return (
-    <div className="card" style={{ padding: 22 }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          marginBottom: 12,
-        }}
-      >
-        <div
-          style={{
-            width: 7,
-            height: 7,
-            borderRadius: "50%",
-            background: "var(--bg-elevated)",
-          }}
-        />
-        <div
-          style={{
-            width: 36,
-            height: 10,
-            borderRadius: 4,
-            background: "var(--bg-elevated)",
-          }}
-        />
-      </div>
-      <div
-        style={{
-          width: "60%",
-          height: 16,
-          borderRadius: 6,
-          background: "var(--bg-elevated)",
-          marginBottom: 16,
-        }}
-      />
-      <div
-        style={{
-          height: 44,
-          borderRadius: 10,
-          background: "var(--bg-elevated)",
-          marginBottom: 14,
-        }}
-      />
-      <div
-        style={{
-          display: "flex",
-          gap: 16,
-          paddingTop: 12,
-          borderTop: "1px solid var(--border-subtle)",
-        }}
-      >
-        <div
-          style={{
-            width: 40,
-            height: 10,
-            borderRadius: 4,
-            background: "var(--bg-elevated)",
-          }}
-        />
-        <div
-          style={{
-            width: 40,
-            height: 10,
-            borderRadius: 4,
-            background: "var(--bg-elevated)",
-          }}
-        />
-      </div>
-    </div>
-  );
-}
 
 const expandBtn: React.CSSProperties = {
   width: "100%",

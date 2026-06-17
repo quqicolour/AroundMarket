@@ -38,8 +38,8 @@ export const config = getDefaultConfig({
 });
 
 export const CONTRACTS = {
-  PredictionMarketFactory: "0x466a2D6030A51A804Fc3DBDa1b98b6559f51D6Cc",
-  SettlementManager: "0xD5Cce848954Ab6370Cf34FED6F850Ada20A5Eb51",
-  ConditionalTokens: "0x8c6eAfb47C562f849393d8eD576bB03a6763522a",
-  Collateral: "0x47b67D03B0093D95C4591974569d3ee738c97Bb3",
+  PredictionMarketFactory: "0xD316E250a5696ff1Ae2a002F1D3cD8c3FdB313ab",
+  SettlementManager: "0x3b75a482A2F0DAdB39CA2569dD1e9D25EfA391D8",
+  ConditionalTokens: "0xD91517C321847AFB18cacf02D5305aeBc6eF8c38",
+  Collateral: "0xAa080805663D0aaD1714B9910f2291658E2D24a0",
 } as const;

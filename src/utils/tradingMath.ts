@@ -93,8 +93,8 @@ export function calcMarketSellCostPrice(isYes: boolean, bestBidYes?: bigint, bes
   return isYes ? (bestBidYes ?? 0n) : (bestAskNo ?? 0n);
 }
 
-export function calcMarketSellMinReceive(amount: bigint, costPrice: bigint): bigint {
-  if (amount <= 0n || costPrice <= 0n || costPrice >= ONE) return 0n;
-  const expectedNet = (amount * (ONE - costPrice)) / ONE;
-  return (expectedNet * 90n) / 100n;
+export function calcMarketSellMinReceive(amount: bigint, bidPrice: bigint): bigint {
+  if (amount <= 0n || bidPrice <= 0n) return 0n;
+  const expectedReceive = (amount * bidPrice) / ONE;
+  return (expectedReceive * 90n) / 100n;
 }

@@ -1,13 +1,12 @@
 import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { useReadContract } from "wagmi";
-import { ABIs } from "../abis";
-import { CONTRACTS } from "../config/contracts";
 import { formatAddress } from "../utils/format";
 import KLineChart from "../components/KLineChart";
 import OrderBookView from "../components/OrderBookView";
 import RecentTrades from "../components/RecentTrades";
 import MyOrders from "../components/MyOrders";
+import { getMarketTimingStatus, useUnixNow } from "../utils/marketTime";
+import { marketToTuple, useSubgraphMarket } from "../utils/subgraph";
 
 type TabType = "chart" | "orderbook" | "myorders";
 
@@ -24,12 +23,8 @@ export default function MarketDetailPage() {
   const [activeTab, setActiveTab] = useState<TabType>("chart");
   const [addrExpanded, setAddrExpanded] = useState(false);
 
-  const { data: marketData, isLoading } = useReadContract({
-    abi: ABIs.PredictionMarketFactory,
-    address: CONTRACTS.PredictionMarketFactory,
-    functionName: "getMarket",
-    args: [BigInt(id)],
-  });
+  const { data: marketData, isLoading } = useSubgraphMarket(id);
+  const nowTime = useUnixNow();
 
   if (isLoading) return <MarketDetailSkeleton />;
 
@@ -43,21 +38,19 @@ export default function MarketDetailPage() {
     );
   }
 
-  const m = marketData as any;
-  // Types.MarketData: [creator, market, collateral, conditionTokens, orderBook, matchingEngine, conditionId, startTime, endTime, resolved, fee, question, dataSource]
-  const creator       = Array.isArray(m) ? m[0]  : m.creator;
-  const marketAddr    = Array.isArray(m) ? m[1]  : m.market;
-  const collateral    = Array.isArray(m) ? m[2]  : m.collateral;
-  const conditionAddr = Array.isArray(m) ? m[3]  : m.conditionTokens;
-  const orderBookAddr = Array.isArray(m) ? m[4]  : m.orderBook;
-  const matchingEngineAddr = Array.isArray(m) ? m[5] : m.matchingEngine;
-  const conditionId  = Array.isArray(m) ? m[6]  : m.conditionId;
-  const startTime    = Array.isArray(m) ? Number(m[7])  : Number(m.startTime);
-  const endTime      = Array.isArray(m) ? Number(m[8])  : Number(m.endTime);
-  const resolved     = Array.isArray(m) ? m[9]  : m.resolved;
-  const fee          = Array.isArray(m) ? Number(m[10]) : Number(m.fee);
-  const question     = (Array.isArray(m) ? m[11] : m.question)?.trim?.() || `Market #${id}`;
-  const dataSource   = (Array.isArray(m) ? m[12] : m.dataSource)?.trim?.() || "Data source not provided";
+  const creator = marketData.creator;
+  const marketAddr = marketData.market;
+  const collateral = marketData.collateral;
+  const conditionAddr = marketData.conditionTokens;
+  const orderBookAddr = marketData.orderBook;
+  const matchingEngineAddr = marketData.matchingEngine;
+  const conditionId = marketData.conditionId;
+  const startTime = Number(marketData.startTime);
+  const endTime = Number(marketData.endTime);
+  const resolved = marketData.resolved;
+  const fee = Number(marketData.fee);
+  const question = marketData.question?.trim() || `Market #${id}`;
+  const dataSource = marketData.dataSource?.trim() || "Data source not provided";
 
   if (!orderBookAddr || orderBookAddr === "0x0000000000000000000000000000000000000000") {
     return (
@@ -70,7 +63,8 @@ export default function MarketDetailPage() {
   }
 
   // Build marketData tuple for TradingForm.
-  const marketDataTuple: any = [creator, marketAddr, collateral, conditionAddr, orderBookAddr, matchingEngineAddr, conditionId, startTime, endTime, resolved, fee, question, dataSource];
+  const marketDataTuple: any = marketToTuple(marketData);
+  const timing = getMarketTimingStatus(startTime, endTime, resolved, nowTime);
 
   const tabs: { key: TabType; label: string }[] = [
     { key: "chart", label: "Chart" },
@@ -95,18 +89,21 @@ export default function MarketDetailPage() {
 
           {/* Market info */}
           <div className="card" style={{ padding: 20 }}>
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
-              <div>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, marginBottom: 16 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
                   <span style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: "var(--text-tertiary)" }}>#{id}</span>
                   <div style={{
                     padding: "3px 10px", borderRadius: 9999, fontSize: 11, fontWeight: 500,
-                    background: resolved ? "var(--bg-elevated)" : "var(--yes-light)",
-                    color: resolved ? "var(--text-tertiary)" : "var(--yes)",
-                    border: `1px solid ${resolved ? "var(--border)" : "var(--yes-border)"}`,
+                    background: timing.kind === "active" ? "var(--yes-light)" : "var(--bg-elevated)",
+                    color: timing.kind === "active" ? "var(--yes)" : "var(--text-tertiary)",
+                    border: `1px solid ${timing.kind === "active" ? "var(--yes-border)" : "var(--border)"}`,
                   }}>
-                    {resolved ? "Resolved" : "Active"}
+                    {timing.statusLabel}
                   </div>
+                  <span style={{ fontSize: 10, color: "var(--text-tertiary)" }}>
+                    {timing.settlementLabel}
+                  </span>
                   {fee > 0 && (
                     <span style={{ fontSize: 10, color: "var(--text-tertiary)" }}>
                       Fee: {(fee / 1e6 * 100).toFixed(2)}%
@@ -119,14 +116,38 @@ export default function MarketDetailPage() {
                 <p style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 8, lineHeight: 1.55, maxWidth: 680 }}>
                   Resolution source: {dataSource}
                 </p>
-                <p style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 6 }}>
-                  {startTime > 0 && endTime > 0
-                    ? `${new Date(startTime * 1000).toLocaleDateString()} – ${new Date(endTime * 1000).toLocaleDateString()}`
-                    : "YES / NO Binary Prediction Market"}
-                </p>
                 <p style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 2 }}>
-                  Creator: <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{formatAddress(creator, 4)}</span>
+                  Creator:{" "}
+                  <a
+                    href={explorerUrl("address", creator)}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ fontFamily: "'JetBrains Mono', monospace", color: "var(--primary)", fontWeight: 700, textDecoration: "none" }}
+                  >
+                    {formatAddress(creator, 4)}
+                  </a>
                 </p>
+              </div>
+              <div
+                style={{
+                  minWidth: 210,
+                  padding: "12px 14px",
+                  borderRadius: 10,
+                  background: "var(--bg-elevated)",
+                  border: "1px solid var(--border)",
+                  borderLeft: `4px solid ${timing.kind === "active" ? "var(--primary)" : timing.kind === "awaiting" ? "var(--warning)" : "var(--border-strong)"}`,
+                  boxShadow: "var(--shadow-card)",
+                }}
+              >
+                <div style={{ fontSize: 10, fontWeight: 800, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: 0 }}>
+                  Market Time
+                </div>
+                <div style={{ marginTop: 5, fontSize: 22, lineHeight: 1.1, fontWeight: 800, color: timing.kind === "active" ? "var(--primary-text)" : timing.kind === "awaiting" ? "var(--warning)" : "var(--text-primary)", fontFamily: "'JetBrains Mono', monospace" }}>
+                  {timing.countdownLabel}
+                </div>
+                <div style={{ marginTop: 6, fontSize: 11, color: "var(--text-secondary)" }}>
+                  {endTime > 0 ? `Ends ${new Date(endTime * 1000).toLocaleString()}` : "Schedule pending"}
+                </div>
               </div>
             </div>
 
@@ -185,17 +206,17 @@ export default function MarketDetailPage() {
             <div style={{ padding: 0 }}>
               {activeTab === "chart" && (
                 <div style={{ padding: "12px 16px 16px" }}>
-                  <KLineChart width={600} height={260} />
+                  <KLineChart marketId={id} isYes width={600} height={260} />
                 </div>
               )}
               {activeTab === "orderbook" && (
                 <div style={{ padding: 16 }}>
-                  <OrderBookView marketId={id} orderBookAddr={orderBookAddr} collateralAddr={collateral} />
+                  <OrderBookView marketId={id} collateralAddr={collateral} />
                 </div>
               )}
  {activeTab === "myorders" && (
  <div style={{ padding:16 }}>
-  <MyOrders orderBookAddr={orderBookAddr} marketAddr={marketAddr} marketId={id} collateralAddr={collateral} />
+  <MyOrders marketAddr={marketAddr} marketId={id} collateralAddr={collateral} />
  </div>
  )}
             </div>

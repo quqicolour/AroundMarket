@@ -1,261 +1,229 @@
-import { useReadContract, useReadContracts } from "wagmi";
-import { ABIs } from "../abis";
 import { useMemo } from "react";
+import { useReadContract } from "wagmi";
 import { ERC20_DECIMALS_ABI } from "../config/contractAbis";
+import { buildOrderBookLevels, OrderBookLevel, useSubgraphMarketOrders } from "../utils/subgraph";
 import { unitsToNumber } from "../utils/tradingMath";
 
 interface Props {
- marketId: number;
- orderBookAddr: string;
- collateralAddr: string;
+  marketId: number;
+  collateralAddr: string;
 }
 
-// 把 wei price 格式化为 cents (1e18 → 0~1)
+interface DisplayLevel extends OrderBookLevel {
+  shares: number;
+  cumulativeShares: number;
+  totalCollateral: number;
+}
+
 function priceToCents(price: bigint): number {
- return Number(price) / 1e16; // 1e18 / 100 = 1e16, /1e16 还原 cents
+  return Number(price) / 1e16;
 }
 
-// amount 是 CTF 份额数量，精度与 collateral decimals 一致
 function amountToShares(amount: bigint, decimals: number): number {
- return unitsToNumber(amount, decimals);
+  return unitsToNumber(amount, decimals);
 }
 
-// ── 深度条组件 ─────────────────────────────────────────────────────────────────
-function DepthBar({
- value,
- max,
- color,
- align = "right",
+function collateralTotal(depth: bigint, price: bigint, decimals: number): number {
+  return unitsToNumber((depth * price) / 10n ** 18n, decimals);
+}
+
+function formatNumber(value: number, fractionDigits = 2): string {
+  if (!Number.isFinite(value)) return "-";
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(2)}K`;
+  return value.toLocaleString(undefined, {
+    minimumFractionDigits: value < 10 && value > 0 ? fractionDigits : 0,
+    maximumFractionDigits: fractionDigits,
+  });
+}
+
+function buildDisplayLevels(rows: OrderBookLevel[], decimals: number): DisplayLevel[] {
+  let cumulativeShares = 0;
+  return rows.map((row) => {
+    const shares = amountToShares(row.depth, decimals);
+    cumulativeShares += shares;
+    return {
+      ...row,
+      shares,
+      cumulativeShares,
+      totalCollateral: collateralTotal(row.depth, row.price, decimals),
+    };
+  });
+}
+
+export default function OrderBookView({ marketId, collateralAddr }: Props) {
+  const { data: collateralDecimalsRaw } = useReadContract({
+    address: collateralAddr as `0x${string}`,
+    abi: ERC20_DECIMALS_ABI,
+    functionName: "decimals",
+    query: { enabled: !!collateralAddr },
+  });
+  const collateralDecimals = Number(collateralDecimalsRaw ?? 18);
+
+  const { data: orders = [], isLoading } = useSubgraphMarketOrders(marketId);
+  const { yesRows, noRows } = useMemo(() => buildOrderBookLevels(orders), [orders]);
+
+  const yesLevels = useMemo(
+    () => buildDisplayLevels(yesRows, collateralDecimals),
+    [yesRows, collateralDecimals],
+  );
+  const noLevels = useMemo(
+    () => buildDisplayLevels(noRows, collateralDecimals),
+    [noRows, collateralDecimals],
+  );
+
+  const maxCumulativeDepth = Math.max(
+    ...yesLevels.map((row) => row.cumulativeShares),
+    ...noLevels.map((row) => row.cumulativeShares),
+    1,
+  );
+  const bestYesBid = yesRows[0]?.price ?? 0n;
+  const bestNoAsk = noRows[0]?.price ?? 0n;
+  const spread =
+    bestYesBid > 0n && bestNoAsk > 0n
+      ? priceToCents(bestNoAsk) - priceToCents(bestYesBid)
+      : null;
+
+  if (isLoading) {
+    return (
+      <div className="orderbook-shell">
+        {[0, 1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="orderbook-skeleton" />
+        ))}
+      </div>
+    );
+  }
+
+  if (yesLevels.length === 0 && noLevels.length === 0) {
+    return (
+      <div className="orderbook-empty">
+        <p>No orders yet</p>
+        <span>Place a limit order to create the first price level.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="orderbook-shell">
+      <div className="orderbook-summary">
+        <SummaryTile label="Best YES Bid" value={bestYesBid > 0n ? `${priceToCents(bestYesBid).toFixed(1)}c` : "-"} tone="yes" />
+        <SummaryTile label="Spread" value={spread !== null ? `${spread.toFixed(1)}c` : "-"} />
+        <SummaryTile label="Best NO Ask" value={bestNoAsk > 0n ? `${priceToCents(bestNoAsk).toFixed(1)}c` : "-"} tone="no" />
+      </div>
+
+      <div className="orderbook-panels">
+        <OrderSide
+          title="YES Bids"
+          tone="yes"
+          levels={yesLevels}
+          maxCumulativeDepth={maxCumulativeDepth}
+          emptyLabel="No YES bids"
+        />
+        <OrderSide
+          title="NO Asks"
+          tone="no"
+          levels={noLevels}
+          maxCumulativeDepth={maxCumulativeDepth}
+          emptyLabel="No NO asks"
+        />
+      </div>
+    </div>
+  );
+}
+
+function SummaryTile({
+  label,
+  value,
+  tone = "neutral",
 }: {
- value: number;
- max: number;
- color: string;
- align?: "left" | "right";
+  label: string;
+  value: string;
+  tone?: "yes" | "no" | "neutral";
 }) {
- const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
- return (
- <div className="relative h-7 overflow-hidden rounded" style={{ background: "var(--bg-elevated)" }}>
- <div
- className="absolute top-0 h-full transition-all duration-300"
- style={{
- width: `${pct}%`,
- [align]: 0,
- background:
- color === "yes"
- ? "linear-gradient(to left, rgba(16,185,129,0.18), rgba(16,185,129,0.32))"
- : "linear-gradient(to right, rgba(244,63,94,0.18), rgba(244,63,94,0.32))",
- }}
- />
- </div>
- );
+  return (
+    <div className={`orderbook-summary-tile ${tone}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
 }
 
-export default function OrderBookView({ marketId, orderBookAddr, collateralAddr }: Props) {
- const { data: collateralDecimalsRaw } = useReadContract({
- address: collateralAddr as `0x${string}`,
- abi: ERC20_DECIMALS_ABI,
- functionName: "decimals",
- query: { enabled: !!collateralAddr },
- });
- const collateralDecimals = Number(collateralDecimalsRaw ??18);
+function OrderSide({
+  title,
+  tone,
+  levels,
+  maxCumulativeDepth,
+  emptyLabel,
+}: {
+  title: string;
+  tone: "yes" | "no";
+  levels: DisplayLevel[];
+  maxCumulativeDepth: number;
+  emptyLabel: string;
+}) {
+  const totalShares = levels.length > 0 ? levels[levels.length - 1].cumulativeShares : 0;
 
- // 取所有 YES 价格档 + 所有 NO 价格档
- const { data: pricesData, isLoading: pricesLoading } = useReadContracts({
- contracts: [
- {
- address: orderBookAddr as `0x${string}`,
- abi: ABIs.OrderBook,
- functionName: "getSortedPrices",
- args: [BigInt(marketId), true],
- },
- {
- address: orderBookAddr as `0x${string}`,
- abi: ABIs.OrderBook,
- functionName: "getSortedPrices",
- args: [BigInt(marketId), false],
- },
- ],
- query: { enabled: !!orderBookAddr },
- });
+  return (
+    <section className={`orderbook-side ${tone}`} aria-label={title}>
+      <div className="orderbook-side-header">
+        <div>
+          <strong>{title}</strong>
+          <span>{levels.length} levels</span>
+        </div>
+        <div className="orderbook-side-total">
+          <span>Total depth</span>
+          <strong>{formatNumber(totalShares)}</strong>
+        </div>
+      </div>
 
- const yesPrices = (pricesData?.[0]?.result as bigint[] | undefined) ?? [];
- const noPrices = (pricesData?.[1]?.result as bigint[] | undefined) ?? [];
+      <div className="orderbook-table-head">
+        <span>Price</span>
+        <span>Shares</span>
+        <span>Total</span>
+        <span>Orders</span>
+      </div>
 
- // 对每个价格档取深度 (累计 amount)
- const depthCalls = useMemo(() => {
- const calls: any[] = [];
- yesPrices.forEach(p => {
- calls.push({
- address: orderBookAddr as `0x${string}`,
- abi: ABIs.OrderBook,
- functionName: "getDepth" as const,
- args: [BigInt(marketId), true, p, 100n] as const,
- });
- });
- noPrices.forEach(p => {
- calls.push({
- address: orderBookAddr as `0x${string}`,
- abi: ABIs.OrderBook,
- functionName: "getDepth" as const,
- args: [BigInt(marketId), false, p, 100n] as const,
- });
- });
- return calls;
- }, [orderBookAddr, marketId, yesPrices, noPrices]);
+      <div className="orderbook-table-body">
+        {levels.length === 0 ? (
+          <div className="orderbook-side-empty">{emptyLabel}</div>
+        ) : (
+          levels.map((level) => (
+            <OrderBookRow
+              key={level.price.toString()}
+              level={level}
+              tone={tone}
+              maxCumulativeDepth={maxCumulativeDepth}
+            />
+          ))
+        )}
+      </div>
+    </section>
+  );
+}
 
- const { data: depthData, isLoading: depthLoading } = useReadContracts({
- contracts: depthCalls as any,
- query: { enabled: depthCalls.length > 0 },
- });
+function OrderBookRow({
+  level,
+  tone,
+  maxCumulativeDepth,
+}: {
+  level: DisplayLevel;
+  tone: "yes" | "no";
+  maxCumulativeDepth: number;
+}) {
+  const depthPct = Math.min((level.cumulativeShares / maxCumulativeDepth) * 100, 100);
 
- // 整理数据
- const yesRows = useMemo(() => {
- return yesPrices.map((p, i) => {
- const depth = (depthData?.[i]?.result as bigint | undefined) ?? 0n;
- return { price: p, depth };
- });
- }, [yesPrices, depthData]);
-
- const noRows = useMemo(() => {
- return noPrices.map((p, i) => {
- const depth = (depthData?.[yesPrices.length + i]?.result as bigint | undefined) ?? 0n;
- return { price: p, depth };
- });
- }, [noPrices, depthData, yesPrices.length]);
-
- // 计算最大深度（用于 depth bar 比例）
- const maxYes = Math.max(...yesRows.map(r => amountToShares(r.depth, collateralDecimals)), 0);
- const maxNo = Math.max(...noRows.map(r => amountToShares(r.depth, collateralDecimals)), 0);
- const maxDepth = Math.max(maxYes, maxNo, 1);
-
- // 找中间价（spread）
- const bestYesBid = yesPrices.length > 0 ? yesPrices[0] : 0n; // 买价最高 (倒序时第一个)
- const bestNoAsk = noPrices.length > 0 ? noPrices[0] : 0n; // 卖价最低
- const spread =
- bestYesBid > 0n && bestNoAsk > 0n
- ? priceToCents(bestNoAsk) - priceToCents(bestYesBid)
- : null;
-
- const isLoading = pricesLoading || depthLoading;
- const hasData = yesRows.length > 0 || noRows.length > 0;
-
- if (isLoading) {
- return (
- <div className="space-y-2">
- {[0, 1, 2, 3, 4].map(i => (
- <div key={i} className="h-6 rounded bg-gray-100 animate-pulse" />
- ))}
- </div>
- );
- }
-
- if (!hasData) {
- return (
- <div className="text-center py-10">
- <div className="text-3xl mb-2 opacity-30">📋</div>
- <p className="text-xs text-gray-400">No orders yet — be the first to place one</p>
- </div>
- );
- }
-
- return (
- <div className="space-y-3">
- {/* Header — column labels */}
- <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-center text-[10px] uppercase tracking-wider font-semibold text-gray-500 pb-1 border-b border-gray-200">
- <div className="text-right pr-2">YES bid</div>
- <div className="text-center px-2">Price</div>
- <div className="text-left pl-2">NO ask</div>
- </div>
-
- {/* Rows — show matching prices side by side, or stack when count differs */}
- <div className="space-y-0 max-h-[400px] overflow-y-auto">
- {(() => {
- const maxLen = Math.max(yesRows.length, noRows.length);
- const rows: any[] = [];
- for (let i = 0; i < maxLen; i++) {
- const yes = yesRows[i];
- const no = noRows[i];
- rows.push(
- <div
- key={i}
- className="grid grid-cols-[1fr_auto_1fr] gap-2 items-center py-1 hover:bg-gray-50 transition-colors"
- >
- {/* YES side */}
- <div className="flex items-center gap-2 justify-end pr-2">
- {yes ? (
- <>
- <span className="text-emerald-700 font-mono text-xs font-semibold w-14 text-right">
-  {amountToShares(yes.depth, collateralDecimals).toFixed(2)}
-  </span>
-  <DepthBar value={amountToShares(yes.depth, collateralDecimals)} max={maxDepth} color="yes" align="right" />
- </>
- ) : (
- <span className="text-gray-300 text-xs">—</span>
- )}
- </div>
-
- {/* Price label (only show actual price for whichever side has data) */}
- <div className="text-center min-w-[48px]">
- {yes ? (
- <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-700 text-xs font-semibold font-mono">
- {priceToCents(yes.price).toFixed(0)}¢
- </span>
- ) : no ? (
- <span className="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 text-xs font-semibold font-mono">
- {priceToCents(no.price).toFixed(0)}¢
- </span>
- ) : (
- <span className="text-gray-300 text-xs">—</span>
- )}
- </div>
-
- {/* NO side */}
- <div className="flex items-center gap-2 pl-2">
- {no ? (
- <>
-  <DepthBar value={amountToShares(no.depth, collateralDecimals)} max={maxDepth} color="no" align="left" />
-  <span className="text-rose-700 font-mono text-xs font-semibold w-14 text-left">
-  {amountToShares(no.depth, collateralDecimals).toFixed(2)}
- </span>
- </>
- ) : (
- <span className="text-gray-300 text-xs">—</span>
- )}
- </div>
- </div>
- );
- }
- return rows;
- })()}
- </div>
-
- {/* Footer — best prices summary */}
- <div className="grid grid-cols-3 gap-2 pt-2 border-t border-gray-200 text-center">
- <div className="rounded-lg bg-emerald-50 border border-emerald-100 p-2">
- <div className="text-[10px] uppercase font-semibold text-emerald-600 tracking-wider">
- Best YES bid
- </div>
- <div className="text-base font-bold font-mono text-emerald-700">
- {bestYesBid > 0n ? `${priceToCents(bestYesBid).toFixed(0)}¢` : "—"}
- </div>
- </div>
- <div className="rounded-lg bg-gray-50 border border-gray-200 p-2">
- <div className="text-[10px] uppercase font-semibold text-gray-500 tracking-wider">
- Spread
- </div>
- <div className="text-base font-bold font-mono text-gray-700">
- {spread !== null ? `${spread.toFixed(0)}¢` : "—"}
- </div>
- </div>
- <div className="rounded-lg bg-rose-50 border border-rose-100 p-2">
- <div className="text-[10px] uppercase font-semibold text-rose-600 tracking-wider">
- Best NO ask
- </div>
- <div className="text-base font-bold font-mono text-rose-700">
- {bestNoAsk > 0n ? `${priceToCents(bestNoAsk).toFixed(0)}¢` : "—"}
- </div>
- </div>
- </div>
- </div>
- );
+  return (
+    <div className={`orderbook-row ${tone}`}>
+      <div
+        className="orderbook-depth-fill"
+        style={{
+          width: `${depthPct}%`,
+        }}
+      />
+      <span className="orderbook-price">{priceToCents(level.price).toFixed(1)}c</span>
+      <span>{formatNumber(level.shares)}</span>
+      <span>{formatNumber(level.totalCollateral)}</span>
+      <span>{level.orderCount}</span>
+    </div>
+  );
 }

@@ -26,10 +26,10 @@ test("market buy approval covers contract prepay at 0.5 per share", () => {
   assert.equal(calcMarketPrepay(amount), 2_000_000n);
 });
 
-test("market sell also requires the contract prepay allowance", () => {
+test("market sell does not require a USDC prepay allowance", () => {
   const amount = decimalToUnits("3", 6);
 
-  assert.equal(calcMarketPrepay(amount), 1_500_000n);
+  assert.equal(calcLimitOrderPrepay("sell", decimalToWei("0.3"), amount), 0n);
 });
 
 test("market sell uses share approval instead of USDC approval", () => {
@@ -39,14 +39,14 @@ test("market sell uses share approval instead of USDC approval", () => {
   assert.equal(calcTradeApprovalKind("sell", "limit"), "shares");
 });
 
-test("market sell min receive uses the same-side book cost", () => {
+test("market sell min receive uses the matched bid payment", () => {
   const amount = decimalToUnits("2", 6);
   const bestBidYes = decimalToWei("0.30");
   const bestAskNo = decimalToWei("0.20");
 
   assert.equal(calcMarketSellCostPrice(true, bestBidYes, bestAskNo), bestBidYes);
   assert.equal(calcMarketSellCostPrice(false, bestBidYes, bestAskNo), bestAskNo);
-  assert.equal(calcMarketSellMinReceive(amount, bestBidYes), 1_260_000n);
+  assert.equal(calcMarketSellMinReceive(amount, bestBidYes), 540_000n);
 });
 
 test("limit order amount follows collateral decimals and prepay is price times amount", () => {

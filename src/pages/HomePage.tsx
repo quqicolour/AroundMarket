@@ -1,19 +1,11 @@
-import { useReadContract } from "wagmi";
-import { ABIs } from "../abis";
-import { CONTRACTS } from "../config/contracts";
+import { useSubgraphMarkets } from "../utils/subgraph";
 
 const steps = ["Create", "Trade YES / NO", "Redeem Winners"];
 const signals = ["Orderbook matching", "Onchain positions", "Verifiable settlement"];
 
 export default function HomePage() {
-  const { data: rawCount } = useReadContract({
-    abi: ABIs.PredictionMarketFactory,
-    address: CONTRACTS.PredictionMarketFactory,
-    functionName: "getMarketCount",
-    query: { staleTime: 0, gcTime: 0, retry: 3 },
-  });
-
-  const count = Number(rawCount ?? 0n);
+  const { data: markets = [] } = useSubgraphMarkets();
+  const count = markets.length;
 
   return (
     <div className="home-page home-minimal-page">

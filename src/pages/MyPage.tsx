@@ -1,10 +1,9 @@
 import { useMemo, useState } from "react";
-import { useAccount, useReadContracts, useReadContract } from "wagmi";
+import { useAccount } from "wagmi";
 import { Link } from "react-router-dom";
-import { ABIs } from "../abis";
-import { CONTRACTS } from "../config/contracts";
 import MyPositions from "../components/MyPositions";
 import { Loader2 } from "lucide-react";
+import { useSubgraphAllUserOrders, useSubgraphMarkets } from "../utils/subgraph";
 
 interface MarketSummary {
  marketId: number;
@@ -66,43 +65,16 @@ export default function MyPage() {
 }
 
 function PositionsSection() {
- const { data: countRaw } = useReadContract({
- abi: ABIs.PredictionMarketFactory,
- address: CONTRACTS.PredictionMarketFactory,
- functionName: "getMarketCount",
- });
- const count = Number(countRaw ??0n);
-
- // 获取每个 market 的元数据
- const marketCalls: any[] = Array.from({ length: count }, (_, i) => ({
- address: CONTRACTS.PredictionMarketFactory as `0x${string}`,
- abi: ABIs.PredictionMarketFactory,
- functionName: "getMarket",
- args: [BigInt(i +1)],
- }));
-
- const { data: marketsRaw, isLoading } = useReadContracts({
- contracts: marketCalls,
- query: { enabled: count >0 },
- });
+ const { data: marketsRaw = [], isLoading } = useSubgraphMarkets();
 
  const markets = useMemo<MarketSummary[]>(() => {
- if (!marketsRaw) return [];
- return marketsRaw
- .map((r, i) => {
- const data = r.result as any;
- if (!data) return null;
- const orderBook = Array.isArray(data) ? data[4] : data.orderBook;
- if (!orderBook || orderBook === "0x0000000000000000000000000000000000000000") return null;
-  return {
-  marketId: i +1,
-  marketAddr: (Array.isArray(data) ? data[1] : data.market) as string,
-  collateral: (Array.isArray(data) ? data[2] : data.collateral) as string,
-  conditionId: (Array.isArray(data) ? data[6] : data.conditionId) as string,
-  resolved: (Array.isArray(data) ? data[9] : data.resolved) as boolean,
-  };
- })
- .filter((x): x is MarketSummary => x !== null);
+ return marketsRaw.map((market) => ({
+  marketId: Number(market.marketId),
+  marketAddr: market.market,
+  collateral: market.collateral,
+  conditionId: market.conditionId,
+  resolved: market.resolved,
+ }));
  }, [marketsRaw]);
 
  if (isLoading) {
@@ -117,14 +89,18 @@ function PositionsSection() {
 }
 
 function OrdersSection() {
- const { data: countRaw } = useReadContract({
- abi: ABIs.PredictionMarketFactory,
- address: CONTRACTS.PredictionMarketFactory,
- functionName: "getMarketCount",
- });
- const count = Number(countRaw ??0n);
+ const { address } = useAccount();
+ const { data: orders = [], isLoading } = useSubgraphAllUserOrders(address);
 
- if (count ===0) {
+ if (isLoading) {
+ return (
+ <div className="flex items-center justify-center py-12">
+ <Loader2 size={20} className="animate-spin text-gray-400" />
+ </div>
+ );
+ }
+
+ if (orders.length ===0) {
  return (
  <div className="card" style={{ padding:24 }}>
  <h2 style={{ fontSize:16, fontWeight:600, color: "var(--text-primary)", marginBottom:20 }}>My Orders</h2>
@@ -139,13 +115,13 @@ function OrdersSection() {
  <div className="card" style={{ padding:24 }}>
  <h2 style={{ fontSize:16, fontWeight:600, color: "var(--text-primary)", marginBottom:8 }}>My Orders</h2>
  <p style={{ fontSize:13, color: "var(--text-tertiary)", marginBottom:20 }}>
- Open a market to view and cancel your orders there.
+ Your limit orders indexed from The Graph.
  </p>
  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px,1fr))", gap:8 }}>
- {Array.from({ length: count }, (_, i) => i +1).slice(-12).reverse().map(id => (
+ {orders.slice(0, 24).map(order => (
  <Link
- key={id}
- to={`/market/${id}`}
+ key={order.id}
+ to={`/market/${order.marketId}`}
  className="btn-ghost"
  style={{
  fontSize:13,
@@ -160,8 +136,8 @@ function OrdersSection() {
  alignItems: "center",
  }}
  >
- <span>Market #{id}</span>
- <span style={{ color: "var(--text-tertiary)" }}>→</span>
+ <span>Market #{order.marketId}</span>
+ <span style={{ color: "var(--text-tertiary)" }}>{order.status}</span>
  </Link>
  ))}
  </div>

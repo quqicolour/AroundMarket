@@ -22,6 +22,7 @@ import {
   unitsToNumber,
   weiToNumber,
 } from "../utils/tradingMath";
+import { bestAsk, bestBid, useSubgraphMarketOrders } from "../utils/subgraph";
 
 // ── ERC20 ABI (inline, no extra file needed) ──────────────────────────────────
 const ERC20_ABI = erc20Abi;
@@ -162,29 +163,13 @@ export default function TradingForm({ marketData, marketId, initialSide = "yes" 
   const limitPrice = parseFloat(limitPriceInput) ||0;
   const collateralAmount = decimalToUnits(collateralInput, collateralDecimals);
   const limitPriceWei = decimalToWei(limitPriceInput);
-  const orderBookAddr = marketData[4] as string;
-
   // isYes 是 buy/sell 路径的核心决定参数,提前定义供多处使用
   const isYes = side === "yes";
 
-  //实时获取 YES最佳买价 / NO最佳卖价 (1e18精度)
-  // ABI 是 hardhat artifact 顶层 array, wagmi 推断不出返回值类型,所以用 bigint 断言
-  const { data: liveBestBid } = useReadContract({
-   address: orderBookAddr as `0x${string}`,
-   abi: ABIs.OrderBook as any,
-   functionName: "getBestBid",
-   args: [BigInt(marketId)],
-   query: { enabled: isConnected && !!orderBookAddr },
-   });
-  const { data: liveBestAsk } = useReadContract({
-   address: orderBookAddr as `0x${string}`,
-   abi: ABIs.OrderBook as any,
-   functionName: "getBestAsk",
-   args: [BigInt(marketId)],
-   query: { enabled: isConnected && !!orderBookAddr },
-   });
-  const liveBestBidBig: bigint | undefined = liveBestBid as bigint | undefined;
-  const liveBestAskBig: bigint | undefined = liveBestAsk as bigint | undefined;
+  // YES best bid / NO best ask are read from indexed active limit orders.
+  const { data: graphOrders = [] } = useSubgraphMarketOrders(marketId);
+  const liveBestBidBig = bestBid(graphOrders);
+  const liveBestAskBig = bestAsk(graphOrders);
 
   // 读取用户 YES/NO CTF 持仓，数量精度与 collateral decimals 一致
   // CTF.balanceOf 自定义重载: (address holder, bytes32 conditionId, uint256 outcomeIndex)
@@ -252,13 +237,10 @@ export default function TradingForm({ marketData, marketId, initialSide = "yes" 
    ? collateral / priceForCalc
    : 0;
 
-  // 卖出净收入预览: amount × (1 - 对手 bestAsk)
-  // 卖 YES → 撮合 NO 卖单(对手 bestAsk 是 NO 价,撮合成本 = amount × bestAsk_NO)
-  //         净收入 = amount × 1 - amount × bestAsk_NO
-  // 卖 NO  → 撮合 YES 卖单(对手 bestAsk 是 YES 价)
-  //         净收入 = amount × 1 - amount × bestAsk_YES
+  // 卖出收入预览: amount × 当前可吃到的买单价格
+  // 市价卖出只转出对应 CTF 份额,不需要额外支付 USDC 抵押物
   const expectedReceive: bigint = action === "sell" && amountWei >0n && sellCostPrice >0
-   ? (amountWei * (10n **18n - sellCostPriceWei)) / (10n **18n)
+   ? (amountWei * sellCostPriceWei) / (10n **18n)
     : 0n;
 
   // priceWei (1e18精度,传给合约的 limitPrice 参数)
@@ -280,8 +262,9 @@ export default function TradingForm({ marketData, marketId, initialSide = "yes" 
   // approveAmt 拆分: 抵押物金额按 ERC20 decimals, CTF shares/price 保持 1e18
  //   - 限价买入(placeOrder):prepay = price × amount / 1e18
  //   - 限价卖出(placeSellOrder):不锁 USDC,改为托管 CTF shares
- //   - 市价买入/卖出(buyShares/sellShares):内部 _executeTakerOrders 固定按 0.5 × amount 预付
- // maxCost 只做滑点保护,不能作为 ERC20 allowance;否则低价买入/卖出会在 transferFrom 阶段失败
+  //   - 市价买入(buyShares):内部 _executeTakerOrders 固定按 0.5 × amount 预付
+  //   - 市价卖出(sellShares):只需要 CTF 授权,不需要 USDC allowance
+  // maxCost 只做买入滑点保护,不能作为 ERC20 allowance;否则低价买入会在 transferFrom 阶段失败
   const placeOrderCost: bigint = orderMode === "limit"
    ? calcLimitOrderPrepay(action, priceWei, amountWei)
    :0n;
@@ -410,8 +393,8 @@ export default function TradingForm({ marketData, marketId, initialSide = "yes" 
  const fillOrKill = false;
 
  // minReceive: 卖 N 份 isYes 时用户期望最少拿到的抵押物(滑点保护, ERC20 decimals)
- // sellShares 净收入 = mergeAmount - cost ≈ amount × (1 - 对手 bestAsk)
- // 留 10% 滑点:minReceive = expectedReceive × 0.9
+  // sellShares 收入 ≈ amount × 当前可成交买单价格
+  // 留 10% 滑点:minReceive = expectedReceive × 0.9
   const minReceiveWei: bigint = action === "sell"
   ? calcMarketSellMinReceive(amountWei, sellCostPriceWei)
   :0n;
@@ -459,7 +442,7 @@ const sellOverflow = action === "sell" && userShareBig !== undefined && amountWe
   } else if (action === "sell") {
   // Taker 市价卖出: Market.sellShares(bool isYes, uint128 amount, uint128 minReceive)
   // amount = collateral decimals (用户想卖的份数), minReceive = collateral decimals
-  // 合约内部: 撮合 !isYes 卖单 → burn isYes + !isYes → 退 amount USDC → 净 = amount - cost
+  // 合约内部: 吃对应买单,把用户的 CTF 份额转给 maker,把 maker 锁定的 USDC 支付给用户
   console.log("[sellShares]", {
   chain: chainId,
   contract: "Market",
@@ -470,17 +453,17 @@ const sellOverflow = action === "sell" && userShareBig !== undefined && amountWe
   arg1_amountDecimal_CTF: unitsToNumber(amountWei, collateralDecimals),
   arg2_minReceive: minReceiveWei.toString(),
   arg2_minReceiveDecimal: unitsToNumber(minReceiveWei, collateralDecimals),
-  //前端预计净收入(USDC) = amount × (1 - 对手 bestAsk)
+  //前端预计收入(USDC) = amount × 当前可成交买单价格
   expectedNetReceive: expectedReceive.toString ? expectedReceive.toString() : "0",
   expectedNetReceiveDecimal: unitsToNumber(expectedReceive, collateralDecimals),
   //用户当前持仓
   userShareSide: userShareBig?.toString() ?? "0",
   userShareSideDecimal: userShareBig ? unitsToNumber(userShareBig, collateralDecimals) :0,
   //市价单参考价
-  refPrice_BestAsk: liveBestAsk?.toString() ?? "0",
-  refPrice_BestAsk_decimal: liveBestAsk ? Number(liveBestAsk) /1e18 :0,
-  refPrice_BestBid: liveBestBid?.toString() ?? "0",
-  refPrice_BestBid_decimal: liveBestBid ? Number(liveBestBid) /1e18 :0,
+  refPrice_BestAsk: liveBestAskBig?.toString() ?? "0",
+  refPrice_BestAsk_decimal: liveBestAskBig ? Number(liveBestAskBig) /1e18 :0,
+  refPrice_BestBid: liveBestBidBig?.toString() ?? "0",
+  refPrice_BestBid_decimal: liveBestBidBig ? Number(liveBestBidBig) /1e18 :0,
   });
   try {
   writeOrder({
@@ -519,10 +502,10 @@ const sellOverflow = action === "sell" && userShareBig !== undefined && amountWe
    : "0",
   expectedCost_userInputDecimal: unitsToNumber(collateralAmount, collateralDecimals),
   //市价单参考价(来自链上)
-  refPrice_BestAsk_NO: liveBestAsk?.toString() ?? "0",
-  refPrice_BestAsk_NO_decimal: liveBestAsk ? Number(liveBestAsk) /1e18 :0,
-  refPrice_BestBid_YES: liveBestBid?.toString() ?? "0",
-  refPrice_BestBid_YES_decimal: liveBestBid ? Number(liveBestBid) /1e18 :0,
+  refPrice_BestAsk_NO: liveBestAskBig?.toString() ?? "0",
+  refPrice_BestAsk_NO_decimal: liveBestAskBig ? Number(liveBestAskBig) /1e18 :0,
+  refPrice_BestBid_YES: liveBestBidBig?.toString() ?? "0",
+  refPrice_BestBid_YES_decimal: liveBestBidBig ? Number(liveBestBidBig) /1e18 :0,
   });
   try {
   writeOrder({
@@ -569,13 +552,11 @@ const sellOverflow = action === "sell" && userShareBig !== undefined && amountWe
   const isPending = isApprovePending || isApproving || isOrderPending || isOrdering;
   const needsApprove = needsApproval;
  const showApprove = needsApprove;
- const invalidLimitPrice = orderMode === "limit" && (limitPrice <0.002 || limitPrice >0.5);
 
  const submitDisabled =
   !isConnected
   || (action === "buy" && collateral <=0)
   || (action === "sell" && collateral <=0)
-  || invalidLimitPrice
   || (action === "buy" && orderMode === "market" && noLiquidity)
   || (action === "sell" && sellOverflow)
   || (action === "sell" && userShareBig !== undefined && userShareBig ===0n)
@@ -591,11 +572,9 @@ const sellOverflow = action === "sell" && userShareBig !== undefined && amountWe
   buttonLabel = "Connect Wallet";
   } else if (action === "sell" && userShareBig ===0n) {
    buttonLabel = `No ${side.toUpperCase()} Shares`;
- } else if (invalidLimitPrice) {
-  buttonLabel = "Invalid Price";
- } else if (action === "buy" && orderMode === "market" && noLiquidity) {
-  buttonLabel = "No Liquidity";
-  } else if (showApprove) {
+  } else if (action === "buy" && orderMode === "market" && noLiquidity) {
+   buttonLabel = "No Liquidity";
+   } else if (showApprove) {
    buttonLabel = needsShareApproval ? "Approve Shares" : "Approve USDC";
  } else if (orderMode === "limit") {
   buttonLabel = `Place ${side.toUpperCase()} Limit`;
@@ -771,11 +750,11 @@ const sellOverflow = action === "sell" && userShareBig !== undefined && amountWe
           {orderMode === "limit" && (
             <div>
               <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 5 }}>
-                Limit Price <span style={{ color: "var(--text-tertiary)" }}>(0.002 – 0.5)</span>
+                Limit Price
               </label>
               <div style={{ position: "relative" }}>
                 <input
-                  type="number" step="0.002" min="0.002" max="0.5"
+                  type="number"
                   value={limitPriceInput}
                   onChange={e => setLimitPriceInput(e.target.value)}
                   placeholder="0.50"

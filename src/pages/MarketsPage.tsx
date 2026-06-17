@@ -1,30 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
-import { useReadContract } from "wagmi";
-import { ABIs } from "../abis";
-import { CONTRACTS } from "../config/contracts";
+import { useCallback } from "react";
 import MarketCard from "../components/MarketCard";
 import EmptyState from "../components/EmptyState";
+import { useSubgraphMarkets } from "../utils/subgraph";
 
 export default function MarketsPage() {
-  const [marketIds, setMarketIds] = useState<number[]>([]);
-
-  const { data: rawCount, isLoading: countLoading, isError: countError, refetch } = useReadContract({
-    abi: ABIs.PredictionMarketFactory,
-    address: CONTRACTS.PredictionMarketFactory,
-    functionName: "getMarketCount",
-    query: { staleTime: 0, gcTime: 0, retry: 3 },
-  });
-
-  const count = Number(rawCount ?? 0n);
-
-  useEffect(() => {
-    if (count > 0) {
-      const ids = Array.from({ length: count }, (_, i) => i + 1);
-      setMarketIds(ids);
-    } else {
-      setMarketIds([]);
-    }
-  }, [count]);
+  const { data: markets = [], isLoading, isError, refetch } = useSubgraphMarkets();
 
   const refresh = useCallback(() => {
     refetch();
@@ -36,22 +16,22 @@ export default function MarketsPage() {
         <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
           <h1 style={{ fontSize: 22, fontWeight: 800, color: "var(--text-primary)", letterSpacing: 0 }}>Markets</h1>
           <div className="tag-chip">
-            {marketIds.length} {marketIds.length === 1 ? "market" : "markets"}
+            {markets.length} {markets.length === 1 ? "market" : "markets"}
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <button
             onClick={refresh}
-            disabled={countLoading}
+            disabled={isLoading}
             className="market-action-button"
-            style={{ opacity: countLoading ? 0.5 : 1 }}
+            style={{ opacity: isLoading ? 0.5 : 1 }}
           >
             Refresh
           </button>
         </div>
       </div>
 
-      {countLoading ? (
+      {isLoading ? (
         <div className="markets-grid">
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="card" style={{ padding: 20, opacity: 0.5 }}>
@@ -68,17 +48,17 @@ export default function MarketsPage() {
             </div>
           ))}
         </div>
-      ) : countError ? (
+      ) : isError ? (
         <EmptyState
           title="Unable to Load"
-          desc="Check your network connection or verify the contract is deployed"
+          desc="Check your network connection or verify the subgraph is synced"
         />
-      ) : marketIds.length === 0 ? (
+      ) : markets.length === 0 ? (
         <EmptyState title="No markets yet" desc="Be the first to create a prediction market" />
       ) : (
         <div className="markets-grid">
-          {marketIds.map((id) => (
-            <MarketCard key={id} marketId={id} />
+          {markets.map((market) => (
+            <MarketCard key={market.id} market={market} />
           ))}
         </div>
       )}
