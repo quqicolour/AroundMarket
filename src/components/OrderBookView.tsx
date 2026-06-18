@@ -1,7 +1,12 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useReadContract } from "wagmi";
 import { ERC20_DECIMALS_ABI } from "../config/contractAbis";
-import { buildOrderBookLevels, OrderBookLevel, useSubgraphMarketOrders } from "../utils/subgraph";
+import {
+  buildOutcomeOrderBookLevels,
+  OrderBookLevel,
+  Outcome,
+  useSubgraphMarketOrders,
+} from "../utils/subgraph";
 import { unitsToNumber } from "../utils/tradingMath";
 
 interface Props {
@@ -52,6 +57,8 @@ function buildDisplayLevels(rows: OrderBookLevel[], decimals: number): DisplayLe
 }
 
 export default function OrderBookView({ marketId, collateralAddr }: Props) {
+  const [selectedOutcome, setSelectedOutcome] = useState<Outcome>("YES");
+
   const { data: collateralDecimalsRaw } = useReadContract({
     address: collateralAddr as `0x${string}`,
     abi: ERC20_DECIMALS_ABI,
@@ -61,27 +68,30 @@ export default function OrderBookView({ marketId, collateralAddr }: Props) {
   const collateralDecimals = Number(collateralDecimalsRaw ?? 18);
 
   const { data: orders = [], isLoading } = useSubgraphMarketOrders(marketId);
-  const { yesRows, noRows } = useMemo(() => buildOrderBookLevels(orders), [orders]);
-
-  const yesLevels = useMemo(
-    () => buildDisplayLevels(yesRows, collateralDecimals),
-    [yesRows, collateralDecimals],
+  const { buyRows, sellRows } = useMemo(
+    () => buildOutcomeOrderBookLevels(orders, selectedOutcome),
+    [orders, selectedOutcome],
   );
-  const noLevels = useMemo(
-    () => buildDisplayLevels(noRows, collateralDecimals),
-    [noRows, collateralDecimals],
+
+  const buyLevels = useMemo(
+    () => buildDisplayLevels(buyRows, collateralDecimals),
+    [buyRows, collateralDecimals],
+  );
+  const sellLevels = useMemo(
+    () => buildDisplayLevels(sellRows, collateralDecimals),
+    [sellRows, collateralDecimals],
   );
 
   const maxCumulativeDepth = Math.max(
-    ...yesLevels.map((row) => row.cumulativeShares),
-    ...noLevels.map((row) => row.cumulativeShares),
+    ...buyLevels.map((row) => row.cumulativeShares),
+    ...sellLevels.map((row) => row.cumulativeShares),
     1,
   );
-  const bestYesBid = yesRows[0]?.price ?? 0n;
-  const bestNoAsk = noRows[0]?.price ?? 0n;
+  const bestBuy = buyRows[0]?.price ?? 0n;
+  const bestSell = sellRows[0]?.price ?? 0n;
   const spread =
-    bestYesBid > 0n && bestNoAsk > 0n
-      ? priceToCents(bestNoAsk) - priceToCents(bestYesBid)
+    bestBuy > 0n && bestSell > 0n
+      ? priceToCents(bestSell) - priceToCents(bestBuy)
       : null;
 
   if (isLoading) {
@@ -94,7 +104,7 @@ export default function OrderBookView({ marketId, collateralAddr }: Props) {
     );
   }
 
-  if (yesLevels.length === 0 && noLevels.length === 0) {
+  if (buyLevels.length === 0 && sellLevels.length === 0) {
     return (
       <div className="orderbook-empty">
         <p>No orders yet</p>
@@ -105,26 +115,41 @@ export default function OrderBookView({ marketId, collateralAddr }: Props) {
 
   return (
     <div className="orderbook-shell">
+      <div className="orderbook-outcome-switch" role="tablist" aria-label="Order book outcome">
+        {(["YES", "NO"] as const).map((outcome) => (
+          <button
+            key={outcome}
+            type="button"
+            role="tab"
+            aria-selected={selectedOutcome === outcome}
+            className={selectedOutcome === outcome ? "active" : ""}
+            onClick={() => setSelectedOutcome(outcome)}
+          >
+            {outcome}
+          </button>
+        ))}
+      </div>
+
       <div className="orderbook-summary">
-        <SummaryTile label="Best YES Bid" value={bestYesBid > 0n ? `${priceToCents(bestYesBid).toFixed(1)}c` : "-"} tone="yes" />
+        <SummaryTile label={`Best ${selectedOutcome} Buy`} value={bestBuy > 0n ? `${priceToCents(bestBuy).toFixed(1)}c` : "-"} tone="yes" />
         <SummaryTile label="Spread" value={spread !== null ? `${spread.toFixed(1)}c` : "-"} />
-        <SummaryTile label="Best NO Ask" value={bestNoAsk > 0n ? `${priceToCents(bestNoAsk).toFixed(1)}c` : "-"} tone="no" />
+        <SummaryTile label={`Best ${selectedOutcome} Sell`} value={bestSell > 0n ? `${priceToCents(bestSell).toFixed(1)}c` : "-"} tone="no" />
       </div>
 
       <div className="orderbook-panels">
         <OrderSide
-          title="YES Bids"
+          title={`Buy ${selectedOutcome}`}
           tone="yes"
-          levels={yesLevels}
+          levels={buyLevels}
           maxCumulativeDepth={maxCumulativeDepth}
-          emptyLabel="No YES bids"
+          emptyLabel={`No ${selectedOutcome} buy orders`}
         />
         <OrderSide
-          title="NO Asks"
+          title={`Sell ${selectedOutcome}`}
           tone="no"
-          levels={noLevels}
+          levels={sellLevels}
           maxCumulativeDepth={maxCumulativeDepth}
-          emptyLabel="No NO asks"
+          emptyLabel={`No ${selectedOutcome} sell orders`}
         />
       </div>
     </div>

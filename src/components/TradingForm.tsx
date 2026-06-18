@@ -11,7 +11,6 @@ import {
   calcLimitOrderPrepay,
   calcLimitOrderBookSide,
   calcLimitShareAmount,
-  calcMarketPrepay,
   calcMarketSellCostPrice,
   calcMarketSellMinReceive,
   calcTradeApprovalKind,
@@ -22,7 +21,7 @@ import {
   unitsToNumber,
   weiToNumber,
 } from "../utils/tradingMath";
-import { bestAsk, bestBid, useSubgraphMarketOrders } from "../utils/subgraph";
+import { bestAsk, bestBid, bestCollateralBuyPrice, useSubgraphMarketOrders } from "../utils/subgraph";
 
 // ── ERC20 ABI (inline, no extra file needed) ──────────────────────────────────
 const ERC20_ABI = erc20Abi;
@@ -32,6 +31,7 @@ interface Props {
  marketData: readonly [string, string, string, string, string, string, string, bigint, bigint, boolean, number];
  marketId: number;
  initialSide?: "yes" | "no";
+ balanceRefreshSignal?: number;
 }
 
 type TradeAction = "buy" | "sell";
@@ -133,7 +133,7 @@ function CustomSelect({
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-export default function TradingForm({ marketData, marketId, initialSide = "yes" }: Props) {
+export default function TradingForm({ marketData, marketId, initialSide = "yes", balanceRefreshSignal = 0 }: Props) {
   const { showPending, showSuccess, showError } = useTxToast();
   const { isConnected, address: user } = useAccount();
  const chainId = useChainId();
@@ -170,6 +170,8 @@ export default function TradingForm({ marketData, marketId, initialSide = "yes" 
   const { data: graphOrders = [] } = useSubgraphMarketOrders(marketId);
   const liveBestBidBig = bestBid(graphOrders);
   const liveBestAskBig = bestAsk(graphOrders);
+  const bestYesCollateralBuyBig = bestCollateralBuyPrice(graphOrders, "YES");
+  const bestNoCollateralBuyBig = bestCollateralBuyPrice(graphOrders, "NO");
 
   // 读取用户 YES/NO CTF 持仓，数量精度与 collateral decimals 一致
   // CTF.balanceOf 自定义重载: (address holder, bytes32 conditionId, uint256 outcomeIndex)
@@ -196,6 +198,12 @@ export default function TradingForm({ marketData, marketId, initialSide = "yes" 
   const userShareSide = isYes ? userShareYes : userShareNo;
   const userShareBig = isYes ? userYesBig : userNoBig;
 
+  useEffect(() => {
+    if (balanceRefreshSignal <= 0) return;
+    refetchUserYesBalance();
+    refetchUserNoBalance();
+  }, [balanceRefreshSignal]);
+
   // priceForCalc:
   // - 市价单:用实时 bestPrice (buy YES→bestAsk, buy NO→bestBid, sell 对称)
   // - 限价单:用用户输入的 limitPrice
@@ -204,15 +212,16 @@ export default function TradingForm({ marketData, marketId, initialSide = "yes" 
   const bestBidYesPercent = liveBestBidBig && liveBestBidBig >0n ? priceWeiToPercent(liveBestBidBig) : null;
   const bestAskNoPercent = liveBestAskBig && liveBestAskBig >0n ? priceWeiToPercent(liveBestAskBig) : null;
   const buyRefPrice = isYes ? bestAskNoPrice : bestBidYesPrice;
-  const sellCostPriceWei = calcMarketSellCostPrice(isYes, liveBestBidBig, liveBestAskBig);
+  const sellCostPriceWei = calcMarketSellCostPrice(isYes, bestYesCollateralBuyBig, bestNoCollateralBuyBig);
   const sellCostPrice = sellCostPriceWei >0n ? weiToNumber(sellCostPriceWei) :0;
   const refPrice = action === "sell" ? sellCostPrice : buyRefPrice;
   const priceForCalc = orderMode === "market" && refPrice >0
    ? refPrice
    : (limitPrice >0 ? limitPrice : MOCK_PRICE_YES);
 
-  //市价单无流动性检查(只对买入生效;卖出若无对簿,合约 sellShares 会自动回退部分成交)
+  // 市价买入看可吃的对手卖单；市价卖出只能吃 collateral buy 单，不能把份额卖单算成流动性。
   const noLiquidity = orderMode === "market" && action === "buy" && isConnected && buyRefPrice ===0;
+  const noSellLiquidity = orderMode === "market" && action === "sell" && isConnected && sellCostPriceWei === 0n;
 
   const sideColor = isYes ? "var(--yes)" : "var(--no)";
   const sideBg = sideColor;
@@ -262,9 +271,8 @@ export default function TradingForm({ marketData, marketId, initialSide = "yes" 
   // approveAmt 拆分: 抵押物金额按 ERC20 decimals, CTF shares/price 保持 1e18
  //   - 限价买入(placeOrder):prepay = price × amount / 1e18
  //   - 限价卖出(placeSellOrder):不锁 USDC,改为托管 CTF shares
-  //   - 市价买入(buyShares):内部 _executeTakerOrders 固定按 0.5 × amount 预付
+  //   - 市价买入(buyShares):合约按 maxCost / amount 推导执行限价
   //   - 市价卖出(sellShares):只需要 CTF 授权,不需要 USDC allowance
-  // maxCost 只做买入滑点保护,不能作为 ERC20 allowance;否则低价买入会在 transferFrom 阶段失败
   const placeOrderCost: bigint = orderMode === "limit"
    ? calcLimitOrderPrepay(action, priceWei, amountWei)
    :0n;
@@ -273,7 +281,7 @@ export default function TradingForm({ marketData, marketId, initialSide = "yes" 
   ? calcBufferedMaxCost(collateralAmount)
    :0n;
  const approvalKind = calcTradeApprovalKind(action, orderMode);
- const marketPrepay: bigint = orderMode === "market" && approvalKind === "usdc" ? calcMarketPrepay(amountWei) :0n;
+ const marketPrepay: bigint = orderMode === "market" && approvalKind === "usdc" ? buyMaxCost :0n;
  // approve 金额:买入用 USDC; 卖出(市价/限价)走 CTF setApprovalForAll
  const approveAmt: bigint = approvalKind === "usdc" ? (orderMode === "limit" ? placeOrderCost : marketPrepay) :0n;
 
@@ -383,11 +391,8 @@ export default function TradingForm({ marketData, marketId, initialSide = "yes" 
  //   - buyShares 内部走 fillOrders + 链上 OB.getFills 预读做滑点守门,比直接调 fillOrders 更安全
 
  // maxCostWei: 用户愿意为买 amount 份 CTF 出的最多抵押物(滑点保护, ERC20 decimals)
- // buyShares 内部:
- //   1. 链上 view 预读 OB.getFills(isYes, 5e17, amount) 算出 previewCost
- //   2. previewCost > maxCost → revert "M: buyShares preview cost > maxCost"
- //   3. 撮合完成后链上兜底再校验一次
- // 我们直接用用户输入 USDC × 1.1 作为 maxCost(合约测试 buyShares(true, p("1"), p("0.5"), false) 模式)
+// buyShares 内部会用 maxCost / amount 推导 per-share 限价,并在链上做预算保护。
+// 前端授权同样使用 maxCost,避免高于 0.5 的订单在 transferFrom 阶段失败。
  const maxCostWei: bigint = buyMaxCost;
  // fillOrKill: false = 允许部分成交(true 会更激进,但失败概率高,UX 不友好)
  const fillOrKill = false;
@@ -460,10 +465,10 @@ const sellOverflow = action === "sell" && userShareBig !== undefined && amountWe
   userShareSide: userShareBig?.toString() ?? "0",
   userShareSideDecimal: userShareBig ? unitsToNumber(userShareBig, collateralDecimals) :0,
   //市价单参考价
-  refPrice_BestAsk: liveBestAskBig?.toString() ?? "0",
-  refPrice_BestAsk_decimal: liveBestAskBig ? Number(liveBestAskBig) /1e18 :0,
-  refPrice_BestBid: liveBestBidBig?.toString() ?? "0",
-  refPrice_BestBid_decimal: liveBestBidBig ? Number(liveBestBidBig) /1e18 :0,
+  refPrice_BestYesCollateralBuy: bestYesCollateralBuyBig?.toString() ?? "0",
+  refPrice_BestYesCollateralBuy_decimal: bestYesCollateralBuyBig ? Number(bestYesCollateralBuyBig) /1e18 :0,
+  refPrice_BestNoCollateralBuy: bestNoCollateralBuyBig?.toString() ?? "0",
+  refPrice_BestNoCollateralBuy_decimal: bestNoCollateralBuyBig ? Number(bestNoCollateralBuyBig) /1e18 :0,
   });
   try {
   writeOrder({
@@ -482,7 +487,7 @@ const sellOverflow = action === "sell" && userShareBig !== undefined && amountWe
   // amount = collateral decimals (想买的份数)
   // maxCost = collateral decimals (滑点保护, 留 10% 缓冲)
   // fillOrKill = false (允许部分成交)
-  // 合约内部:链上 view OB.getFills(isYes, 5e17, amount) 预读 → previewCost > maxCost revert → 撮合
+  // 合约内部:用 maxCost / amount 推导限价并做预算保护
   // isYes=true → 买 YES 吃 NO 卖单(从 bestAsk 往上扫)
   // isYes=false → 买 NO 吃 YES 买单(从 bestBid 往下扫)
   console.log("[buyShares]", {
@@ -537,8 +542,12 @@ const sellOverflow = action === "sell" && userShareBig !== undefined && amountWe
   }
 
   if (action === "buy" && orderMode === "market" && noLiquidity) {
-   showError("No liquidity for this outcome");
-   return;
+    showError("No liquidity for this outcome");
+    return;
+  }
+  if (action === "sell" && orderMode === "market" && noSellLiquidity) {
+    showError(`No buy orders available for ${side.toUpperCase()} shares`);
+    return;
   }
 
   if (needsApproval) {
@@ -558,6 +567,7 @@ const sellOverflow = action === "sell" && userShareBig !== undefined && amountWe
   || (action === "buy" && collateral <=0)
   || (action === "sell" && collateral <=0)
   || (action === "buy" && orderMode === "market" && noLiquidity)
+  || (action === "sell" && orderMode === "market" && noSellLiquidity)
   || (action === "sell" && sellOverflow)
   || (action === "sell" && userShareBig !== undefined && userShareBig ===0n)
   || isPending
@@ -572,8 +582,10 @@ const sellOverflow = action === "sell" && userShareBig !== undefined && amountWe
   buttonLabel = "Connect Wallet";
   } else if (action === "sell" && userShareBig ===0n) {
    buttonLabel = `No ${side.toUpperCase()} Shares`;
-  } else if (action === "buy" && orderMode === "market" && noLiquidity) {
-   buttonLabel = "No Liquidity";
+   } else if (action === "buy" && orderMode === "market" && noLiquidity) {
+    buttonLabel = "No Liquidity";
+    } else if (action === "sell" && orderMode === "market" && noSellLiquidity) {
+    buttonLabel = `No ${side.toUpperCase()} Buy Orders`;
    } else if (showApprove) {
    buttonLabel = needsShareApproval ? "Approve Shares" : "Approve USDC";
  } else if (orderMode === "limit") {
@@ -611,12 +623,12 @@ const sellOverflow = action === "sell" && userShareBig !== undefined && amountWe
 
         {/* Header: BEST PRICE —实时来自链上 */}
  <div style={{
- padding: "14px18px12px",
+ padding: "14px 18px 12px",
  borderBottom: "1px solid var(--border)",
  background: "var(--bg-elevated)",
- display: "flex", alignItems: "center", justifyContent: "space-between",
+ display: "flex", alignItems: "center", justifyContent: "center",
  }}>
- <div style={{ display: "flex", alignItems: "center", gap:6 }}>
+ <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
  <div style={{ textAlign: "center" }}>
  <div style={{ fontSize:22, fontWeight:800, color: "var(--yes)", fontFamily: "'JetBrains Mono', monospace", lineHeight:1.1 }}>
  {bestBidYesPercent !== null ? formatProbabilityPercent(bestBidYesPercent) : "—"}
@@ -628,7 +640,7 @@ const sellOverflow = action === "sell" && userShareBig !== undefined && amountWe
  <div style={{ fontSize:22, fontWeight:800, color: "var(--no)", fontFamily: "'JetBrains Mono', monospace", lineHeight:1.1 }}>
  {bestAskNoPercent !== null ? formatProbabilityPercent(bestAskNoPercent) : "—"}
  </div>
- <div style={{ fontSize:9, fontWeight:600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>NO ask</div>
+ <div style={{ fontSize:9, fontWeight:600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>NO</div>
  </div>
  </div>
  </div>

@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAccount, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
+import { useAccount, useReadContract, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 import { encodeAbiParameters, keccak256 } from "viem";
 import { CalendarClock, Database, FileText, Loader2, ShieldCheck } from "lucide-react";
 import { ABIs } from "../abis";
@@ -8,16 +8,16 @@ import { CONTRACTS } from "../config/contracts";
 import { useTxToast } from "../components/TxToastContext";
 
 function defaultStartTime() {
-  return new Date(Date.now() + 3600_000).toISOString().slice(0, 16);
+  return toLocalDateTimeInput(new Date(Date.now() + 3600_000));
 }
 
 function defaultEndTime() {
-  return new Date(Date.now() + 7 * 86400_000).toISOString().slice(0, 16);
+  return toLocalDateTimeInput(new Date(Date.now() + 7 * 86400_000));
 }
 
 export default function CreateMarketPage() {
   const navigate = useNavigate();
-  const { isConnected } = useAccount();
+  const { address, isConnected } = useAccount();
   const { showPending, showSuccess, showError } = useTxToast();
 
   const [question, setQuestion] = useState("");
@@ -31,11 +31,27 @@ export default function CreateMarketPage() {
 
   const { writeContract, data: txHash, isPending, error: writeError } = useWriteContract();
   const { isLoading: isConfirming, isSuccess, isError } = useWaitForTransactionReceipt({ hash: txHash });
+  const { data: factoryOwner, isLoading: isOwnerLoading, isError: isOwnerError } = useReadContract({
+    abi: ABIs.PredictionMarketFactory,
+    address: CONTRACTS.PredictionMarketFactory,
+    functionName: "owner",
+  } as any);
 
   const trimmedQuestion = question.trim();
   const trimmedDataSource = dataSource.trim();
   const feePercent = Number.parseFloat(fee || "0");
+  const ownerAddress = typeof factoryOwner === "string" ? factoryOwner : "";
+  const isCreatorWallet =
+    Boolean(address && ownerAddress) && address?.toLowerCase() === ownerAddress.toLowerCase();
   const isWorking = isPending || isConfirming;
+  const cannotCreate =
+    !isConnected ||
+    !trimmedQuestion ||
+    !trimmedDataSource ||
+    isOwnerLoading ||
+    isOwnerError ||
+    (Boolean(ownerAddress) && !isCreatorWallet) ||
+    isWorking;
 
   const conditionId = useMemo(
     () => (trimmedQuestion ? computeConditionId(trimmedQuestion) : ""),
@@ -71,10 +87,11 @@ export default function CreateMarketPage() {
 
   useEffect(() => {
     if (!writeError) return;
-    const msg = (writeError as any)?.shortMessage || (writeError as any)?.message || "Transaction failed";
+    const rawMsg = (writeError as any)?.shortMessage || (writeError as any)?.message || "Transaction failed";
+    const msg = normalizeCreateMarketError(rawMsg, ownerAddress);
     setErrorMsg(msg);
     showError(msg);
-  }, [showError, writeError]);
+  }, [ownerAddress, showError, writeError]);
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -84,6 +101,14 @@ export default function CreateMarketPage() {
     const endTs = Math.floor(new Date(endTime).getTime() / 1000);
     setErrorMsg("");
 
+    if (isOwnerError) {
+      setErrorMsg("Unable to verify factory owner. Check RPC/network and try again.");
+      return;
+    }
+    if (ownerAddress && !isCreatorWallet) {
+      setErrorMsg(`Only the factory owner can create markets. Owner: ${shortAddress(ownerAddress)}`);
+      return;
+    }
     if (endTs <= startTs) {
       setErrorMsg("End time must be after start time.");
       return;
@@ -187,7 +212,7 @@ export default function CreateMarketPage() {
                   type="button"
                   onClick={() => {
                     const start = new Date(startTime);
-                    setEndTime(new Date(start.getTime() + pick.hours * 3600_000).toISOString().slice(0, 16));
+                    setEndTime(toLocalDateTimeInput(new Date(start.getTime() + pick.hours * 3600_000)));
                   }}
                 >
                   End {pick.label}
@@ -208,16 +233,21 @@ export default function CreateMarketPage() {
           </CreateSection>
 
           {errorMsg && <div className="create-error">{errorMsg}</div>}
+          {isConnected && ownerAddress && !isCreatorWallet && (
+            <div className="create-access-note">
+              Connected wallet cannot create markets. Switch to factory owner {shortAddress(ownerAddress)}.
+            </div>
+          )}
 
           <div className="create-page-actions">
             <button
               type="submit"
-              disabled={!isConnected || !trimmedQuestion || !trimmedDataSource || isWorking}
+              disabled={cannotCreate}
               className="btn-primary"
             >
               {isWorking ? (
                 <><Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} /> {isConfirming ? "Confirming..." : "Signing..."}</>
-              ) : !isConnected ? "Connect Wallet" : "Create"}
+              ) : !isConnected ? "Connect Wallet" : isOwnerLoading ? "Checking Owner..." : isOwnerError ? "Owner Check Failed" : ownerAddress && !isCreatorWallet ? "Owner Wallet Required" : "Create"}
             </button>
           </div>
         </div>
@@ -281,6 +311,24 @@ function PreviewStat({ label, value }: { label: string; value: string }) {
       <strong>{value}</strong>
     </div>
   );
+}
+
+function toLocalDateTimeInput(date: Date) {
+  const offsetMs = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+}
+
+function shortAddress(value: string) {
+  return `${value.slice(0, 6)}...${value.slice(-4)}`;
+}
+
+function normalizeCreateMarketError(message: string, ownerAddress: string) {
+  if (message.includes("Factory: unauthorized")) {
+    return ownerAddress
+      ? `Only the factory owner can create markets. Owner: ${shortAddress(ownerAddress)}`
+      : "Only the factory owner can create markets.";
+  }
+  return message;
 }
 
 function computeConditionId(question: string): string {

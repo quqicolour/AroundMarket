@@ -22,6 +22,8 @@ interface Props {
   height?: number;
 }
 
+type ChartSide = "yes" | "no";
+
 const TIMEFRAMES = [
   { label: "1m", interval: "ONE_MINUTE" },
   { label: "15m", interval: "FIFTEEN_MINUTES" },
@@ -61,6 +63,10 @@ function toCandle(candle: SubgraphMarketCandle): Candle {
 }
 
 function formatPrice(price: number): string {
+  return `${(price * 100).toFixed(1)}c`;
+}
+
+function formatPercent(price: number): string {
   return `${(price * 100).toFixed(2)}%`;
 }
 
@@ -75,22 +81,29 @@ function formatAxisTime(ts: number, tf: TF): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(1, value));
+}
+
 export default function KLineChart({
   marketId,
   isYes = true,
-  width = 340,
-  height = 200,
+  width = 760,
+  height = 380,
 }: Props) {
   const [tf, setTf] = useState<TF>("1H");
+  const [side, setSide] = useState<ChartSide>(isYes ? "yes" : "no");
   const [tooltip, setTooltip] = useState<Candle | null>(null);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const interval = intervalByLabel[tf];
+  const chartIsYes = side === "yes";
 
   const { data: rawCandles = [], isLoading, isError } = useSubgraphMarketCandles(
     marketId,
     interval,
-    isYes,
+    chartIsYes,
   );
 
   const candles = useMemo(
@@ -105,21 +118,26 @@ export default function KLineChart({
       ? ((lastCandle.close - prevCandle.close) / prevCandle.close) * 100
       : 0;
   const isUp = changePct >= 0;
+  const sideLabel = chartIsYes ? "YES" : "NO";
+  const latestPrice = lastCandle ? formatPrice(lastCandle.close) : "-";
+  const latestPercent = lastCandle ? formatPercent(lastCandle.close) : "-";
 
   if (isLoading) {
     return (
-      <ChartShell>
-        <ChartTopBar
-          tf={tf}
-          setTf={setTf}
-          priceLabel="Loading"
-          changeLabel=""
-          isUp
-          sideLabel={isYes ? "YES" : "NO"}
-        />
-        <div style={{ height, borderRadius: "0 0 12px 12px", background: "var(--bg-elevated)", padding: 12 }}>
-          {[0, 1, 2, 3, 4].map((i) => (
-            <div key={i} style={{ height: 18, marginBottom: 14, borderRadius: 6, background: "rgba(255,255,255,0.75)" }} />
+      <ChartShell
+        tf={tf}
+        setTf={setTf}
+        side={side}
+        setSide={setSide}
+        sideLabel={sideLabel}
+        priceLabel="Loading"
+        percentLabel="-"
+        changeLabel=""
+        isUp
+      >
+        <div className="pm-chart-loading" style={{ minHeight: height }}>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <span key={i} />
           ))}
         </div>
       </ChartShell>
@@ -128,62 +146,56 @@ export default function KLineChart({
 
   if (isError || candles.length === 0) {
     return (
-      <ChartShell>
-        <ChartTopBar
-          tf={tf}
-          setTf={setTf}
-          priceLabel="-"
-          changeLabel=""
-          isUp
-          sideLabel={isYes ? "YES" : "NO"}
-        />
-        <div style={{
-          minHeight: height,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 6,
-          borderRadius: "0 0 12px 12px",
-          background: "var(--bg-elevated)",
-          color: "var(--text-tertiary)",
-          textAlign: "center",
-          padding: 18,
-        }}>
-          <strong style={{ color: "var(--text-secondary)", fontSize: 13 }}>
-            {isError ? "K-line data unavailable" : "No K-line data yet"}
-          </strong>
-          <span style={{ fontSize: 12 }}>
-            {isError ? "The subgraph returned an error or is still indexing." : "Candles will appear after matched trades are indexed."}
+      <ChartShell
+        tf={tf}
+        setTf={setTf}
+        side={side}
+        setSide={setSide}
+        sideLabel={sideLabel}
+        priceLabel="-"
+        percentLabel="-"
+        changeLabel=""
+        isUp
+      >
+        <div className="pm-chart-empty" style={{ minHeight: height }}>
+          <strong>{isError ? "Chart unavailable" : "No price history yet"}</strong>
+          <span>
+            {isError
+              ? "The subgraph is still indexing or returned an error."
+              : "Candles will appear after matched trades are indexed."}
           </span>
         </div>
       </ChartShell>
     );
   }
 
-  const priceMin = Math.min(...candles.map((c) => c.low));
-  const priceMax = Math.max(...candles.map((c) => c.high));
-  const priceRange = priceMax - priceMin || 0.001;
+  const rawMin = Math.min(...candles.map((c) => c.low));
+  const rawMax = Math.max(...candles.map((c) => c.high));
+  const padding = Math.max((rawMax - rawMin) * 0.18, 0.01);
+  const priceMin = clamp01(rawMin - padding);
+  const priceMax = clamp01(rawMax + padding);
+  const priceRange = priceMax - priceMin || 0.02;
   const volMax = Math.max(...candles.map((c) => c.volume || c.tradeCount || 1));
 
-  const chartH = Math.floor(height * 0.72);
-  const volH = Math.floor(height * 0.18);
+  const chartH = Math.floor(height * 0.76);
+  const volH = Math.floor(height * 0.16);
   const gap = Math.floor(height * 0.04);
-  const padTop = 8;
-  const padBottom = 20;
-  const padLeft = 8;
-  const padRight = 8;
+  const padTop = 18;
+  const padBottom = 24;
+  const padLeft = 18;
+  const padRight = 58;
 
   const plotW = width - padLeft - padRight;
   const plotH = chartH - padTop - padBottom;
-  const totalStep = plotW / Math.max(candles.length - 1, 1);
+  const step = plotW / Math.max(candles.length, 1);
+  const volumeBarW = Math.max(2, Math.min(10, step * 0.56));
 
   function pxY(price: number): number {
     return chartH - padBottom - ((price - priceMin) / priceRange) * plotH;
   }
 
   function pxX(i: number): number {
-    return padLeft + i * totalStep;
+    return padLeft + step * i + step / 2;
   }
 
   function pxVol(v: number): number {
@@ -191,7 +203,7 @@ export default function KLineChart({
   }
 
   function snapToCandle(mouseX: number): number {
-    return Math.round((mouseX - padLeft) / totalStep);
+    return Math.floor((mouseX - padLeft) / step);
   }
 
   function handleMouseMove(e: React.MouseEvent<SVGSVGElement>) {
@@ -213,40 +225,81 @@ export default function KLineChart({
     { length: 5 },
     (_, i) => priceMin + (priceRange * i) / 4,
   );
+  const timeGridIndices = Array.from(new Set([
+    0,
+    Math.floor(candles.length * 0.25),
+    Math.floor(candles.length * 0.5),
+    Math.floor(candles.length * 0.75),
+    candles.length - 1,
+  ])).filter((i) => candles[i]);
 
   const volBars = candles.map((c, i) => {
     const isGreen = c.close >= c.open;
     const volume = c.volume || c.tradeCount;
     const barH = Math.max(2, (volume / (volMax || 1)) * volH);
-    return { x: pxX(i) - totalStep / 2, y: pxVol(volume), w: totalStep, h: barH, isGreen };
+    return {
+      x: pxX(i) - volumeBarW / 2,
+      y: pxVol(volume),
+      w: volumeBarW,
+      h: barH,
+      isGreen,
+    };
   });
 
-  return (
-    <ChartShell>
-      <ChartTopBar
-        tf={tf}
-        setTf={setTf}
-        priceLabel={formatPrice(lastCandle.close)}
-        changeLabel={`${isUp ? "+" : ""}${changePct.toFixed(2)}%`}
-        isUp={isUp}
-        sideLabel={isYes ? "YES" : "NO"}
-      />
+  const linePoints = candles.map((c, i) => ({
+    x: pxX(i),
+    y: pxY(c.close),
+    candle: c,
+  }));
+  const linePath = linePoints
+    .map((point, i) => `${i === 0 ? "M" : "L"} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`)
+    .join(" ");
+  const areaPath = linePoints.length
+    ? `${linePath} L ${linePoints[linePoints.length - 1].x.toFixed(2)} ${chartH - padBottom} L ${linePoints[0].x.toFixed(2)} ${chartH - padBottom} Z`
+    : "";
+  const lineTone = lastCandle && candles[0] && lastCandle.close >= candles[0].close ? "up" : "down";
 
-      <div style={{ position: "relative", userSelect: "none" }}>
+  return (
+    <ChartShell
+      tf={tf}
+      setTf={setTf}
+      side={side}
+      setSide={setSide}
+      sideLabel={sideLabel}
+      priceLabel={latestPrice}
+      percentLabel={latestPercent}
+      changeLabel={`${isUp ? "+" : ""}${changePct.toFixed(2)}%`}
+      isUp={isUp}
+    >
+      <div className="pm-chart-canvas">
         <svg
           ref={svgRef}
           width="100%"
           viewBox={`0 0 ${width} ${height}`}
-          style={{ display: "block", borderRadius: "0 0 12px 12px", background: "var(--bg-elevated)" }}
+          role="img"
+          aria-label={`${sideLabel} price line chart`}
           onMouseMove={handleMouseMove}
           onMouseLeave={handleMouseLeave}
         >
+          <rect x="0" y="0" width={width} height={height} fill="transparent" />
+
+          {timeGridIndices.map((i) => (
+            <line
+              key={`time-grid-${i}`}
+              x1={pxX(i)}
+              y1={padTop}
+              x2={pxX(i)}
+              y2={chartH + gap + volH}
+              className="pm-grid-line vertical"
+            />
+          ))}
+
           {gridPrices.map((p, i) => {
             const y = pxY(p);
             return (
               <g key={i}>
-                <line x1={padLeft} y1={y} x2={width - padRight} y2={y} stroke="var(--border)" strokeWidth={0.5} strokeDasharray="3,3" />
-                <text x={padLeft - 2} y={y + 3} textAnchor="end" fontSize={9} fill="var(--text-tertiary)" fontFamily="'JetBrains Mono',monospace">
+                <line x1={padLeft} y1={y} x2={width - padRight} y2={y} className="pm-grid-line" />
+                <text x={width - padRight + 10} y={y + 4} className="pm-axis-label">
                   {formatPrice(p)}
                 </text>
               </g>
@@ -254,52 +307,40 @@ export default function KLineChart({
           })}
 
           {volBars.map((v, i) => (
-            <rect key={i} x={v.x + 1} y={v.y} width={Math.max(1, v.w - 2)} height={v.h} fill={v.isGreen ? "rgba(26,127,90,0.25)" : "rgba(201,98,111,0.25)"} rx={1} />
+            <rect
+              key={i}
+              x={v.x}
+              y={v.y}
+              width={v.w}
+              height={v.h}
+              className={v.isGreen ? "pm-volume-bar up" : "pm-volume-bar down"}
+              rx={1}
+            />
           ))}
 
-          {candles.map((c, i) => {
-            const cx = pxX(i);
-            const openY = pxY(c.open);
-            const closeY = pxY(c.close);
-            const highY = pxY(c.high);
-            const lowY = pxY(c.low);
-            const isGreen = c.close >= c.open;
-            const col = isGreen ? "#1a7f5a" : "#c9626f";
-            const bodyTop = Math.min(openY, closeY);
-            const bodyH = Math.max(Math.abs(openY - closeY), 1);
-            const isHighlighted = selectedIdx === i;
+          <path className={`pm-line-area ${lineTone}`} d={areaPath} />
+          <path className={`pm-price-line ${lineTone}`} d={linePath} />
 
-            return (
-              <g key={`${c.ts}-${i}`}>
-                <line x1={cx} y1={highY} x2={cx} y2={lowY} stroke={col} strokeWidth={1} />
-                <rect
-                  x={cx - totalStep / 2 + 1}
-                  y={bodyTop}
-                  width={Math.max(2, totalStep - 2)}
-                  height={bodyH}
-                  fill={col}
-                  rx={1}
-                  opacity={isHighlighted ? 1 : 0.85}
-                />
-                {isHighlighted && (
-                  <rect x={cx - totalStep / 2} y={bodyTop - 2} width={totalStep} height={bodyH + 4} fill="none" stroke={col} strokeWidth={1.5} rx={2} />
-                )}
-              </g>
-            );
-          })}
-
-          {selectedIdx !== null && (
+          {selectedIdx !== null && tooltip && (
             <>
-              <line x1={pxX(selectedIdx)} y1={padTop} x2={pxX(selectedIdx)} y2={chartH - padBottom} stroke="rgba(100,100,100,0.4)" strokeWidth={0.8} strokeDasharray="3,3" />
-              {tooltip && (
-                <line x1={padLeft} y1={pxY(tooltip.close)} x2={width - padRight} y2={pxY(tooltip.close)} stroke="rgba(100,100,100,0.3)" strokeWidth={0.8} strokeDasharray="3,3" />
-              )}
+              <line x1={pxX(selectedIdx)} y1={padTop} x2={pxX(selectedIdx)} y2={chartH - padBottom} className="pm-crosshair" />
+              <line x1={padLeft} y1={pxY(tooltip.close)} x2={width - padRight} y2={pxY(tooltip.close)} className="pm-crosshair" />
+              <circle
+                cx={pxX(selectedIdx)}
+                cy={pxY(tooltip.close)}
+                r={4}
+                className={`pm-line-point ${lineTone}`}
+              />
+              <rect x={width - padRight + 6} y={pxY(tooltip.close) - 11} width={46} height={20} rx={5} className="pm-price-tag-bg" />
+              <text x={width - padRight + 29} y={pxY(tooltip.close) + 4} textAnchor="middle" className="pm-price-tag">
+                {formatPrice(tooltip.close)}
+              </text>
             </>
           )}
 
           {[0, Math.floor(candles.length / 2), candles.length - 1].map((i) => (
             candles[i] ? (
-              <text key={i} x={pxX(i)} y={chartH + volH + gap + 12} textAnchor="middle" fontSize={9} fill="var(--text-tertiary)" fontFamily="'JetBrains Mono',monospace">
+              <text key={i} x={pxX(i)} y={height - 7} textAnchor="middle" className="pm-time-label">
                 {formatAxisTime(candles[i].ts, tf)}
               </text>
             ) : null
@@ -307,29 +348,25 @@ export default function KLineChart({
         </svg>
 
         {tooltip && selectedIdx !== null && (
-          <div style={{
-            position: "absolute",
-            left: Math.min(pxX(selectedIdx) + 8, width - 130),
-            top: Math.max(pxY(tooltip.high) - 10, 4),
-            background: "var(--bg-surface)",
-            border: "1px solid var(--border)",
-            borderRadius: 8,
-            padding: "6px 10px",
-            fontSize: 10,
-            fontFamily: "'JetBrains Mono', monospace",
-            color: "var(--text-primary)",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-            pointerEvents: "none",
-            zIndex: 10,
-            minWidth: 120,
-          }}>
-            <div style={{ color: "var(--text-tertiary)", marginBottom: 3 }}>
-              {new Date(tooltip.ts).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+          <div
+            className="pm-chart-tooltip"
+            style={{
+              left: `min(${Math.max(8, (pxX(selectedIdx) / width) * 100)}%, calc(100% - 172px))`,
+              top: Math.max(pxY(tooltip.high) - 16, 10),
+            }}
+          >
+            <div className="pm-chart-tooltip-time">
+              {new Date(tooltip.ts).toLocaleString("en-US", {
+                month: "short",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
             </div>
-            <TooltipRow label="O" value={formatPrice(tooltip.open)} />
-            <TooltipRow label="H" value={formatPrice(tooltip.high)} tone="yes" />
-            <TooltipRow label="L" value={formatPrice(tooltip.low)} tone="no" />
-            <TooltipRow label="C" value={formatPrice(tooltip.close)} />
+            <TooltipRow label="Open" value={formatPrice(tooltip.open)} />
+            <TooltipRow label="High" value={formatPrice(tooltip.high)} tone="yes" />
+            <TooltipRow label="Low" value={formatPrice(tooltip.low)} tone="no" />
+            <TooltipRow label="Close" value={formatPrice(tooltip.close)} />
             <TooltipRow label="Trades" value={tooltip.tradeCount.toFixed(0)} />
           </div>
         )}
@@ -338,68 +375,68 @@ export default function KLineChart({
   );
 }
 
-function ChartShell({ children }: { children: React.ReactNode }) {
-  return <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>{children}</div>;
-}
-
-function ChartTopBar({
+function ChartShell({
+  children,
   tf,
   setTf,
+  side,
+  setSide,
+  sideLabel,
   priceLabel,
+  percentLabel,
   changeLabel,
   isUp,
-  sideLabel,
 }: {
+  children: React.ReactNode;
   tf: TF;
   setTf: (tf: TF) => void;
+  side: ChartSide;
+  setSide: (side: ChartSide) => void;
+  sideLabel: string;
   priceLabel: string;
+  percentLabel: string;
   changeLabel: string;
   isUp: boolean;
-  sideLabel: string;
 }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px 4px", flexWrap: "wrap", gap: 6 }}>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 18, color: "var(--text-primary)" }}>
-          {priceLabel}
-        </span>
-        {changeLabel && (
-          <span style={{
-            fontFamily: "'JetBrains Mono', monospace",
-            fontWeight: 600,
-            fontSize: 12,
-            color: isUp ? "var(--yes)" : "var(--no)",
-          }}>
-            {changeLabel}
-          </span>
-        )}
-        <span style={{ fontSize: 11, fontWeight: 800, color: sideLabel === "YES" ? "var(--yes)" : "var(--no)" }}>
-          {sideLabel}
-        </span>
+    <section className="pm-chart-panel">
+      <div className="pm-chart-header">
+        <div className="pm-chart-price-block">
+          <span className={side === "yes" ? "pm-outcome-chip yes" : "pm-outcome-chip no"}>{sideLabel}</span>
+          <strong>{priceLabel}</strong>
+          <span className="pm-chart-percent">{percentLabel}</span>
+          {changeLabel && (
+            <span className={isUp ? "pm-change up" : "pm-change down"}>{changeLabel}</span>
+          )}
+        </div>
+
+        <div className="pm-chart-controls">
+          <div className="pm-side-toggle" aria-label="Chart outcome">
+            <button type="button" className={side === "yes" ? "active yes" : ""} onClick={() => setSide("yes")}>
+              YES
+            </button>
+            <button type="button" className={side === "no" ? "active no" : ""} onClick={() => setSide("no")}>
+              NO
+            </button>
+          </div>
+
+          <div className="pm-timeframe-tabs" aria-label="Chart timeframe">
+            {TIMEFRAMES.map((f) => (
+              <button
+                key={f.label}
+                type="button"
+                className={tf === f.label ? "active" : ""}
+                onClick={() => setTf(f.label)}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
-      <div style={{ display: "flex", gap: 3 }}>
-        {TIMEFRAMES.map((f) => (
-          <button
-            key={f.label}
-            onClick={() => setTf(f.label)}
-            style={{
-              padding: "3px 8px",
-              borderRadius: 6,
-              fontSize: 11,
-              fontWeight: 600,
-              border: "none",
-              cursor: "pointer",
-              transition: "all 100ms",
-              background: tf === f.label ? "var(--primary)" : "var(--bg-elevated)",
-              color: tf === f.label ? "white" : "var(--text-tertiary)",
-            }}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
-    </div>
+      {children}
+    </section>
   );
 }
 
@@ -413,11 +450,11 @@ function TooltipRow({
   tone?: "yes" | "no";
 }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-      <span style={{ color: "var(--text-secondary)" }}>{label}</span>
-      <span style={{ color: tone === "yes" ? "var(--yes)" : tone === "no" ? "var(--no)" : "var(--text-primary)" }}>
+    <div className="pm-tooltip-row">
+      <span>{label}</span>
+      <strong className={tone === "yes" ? "yes" : tone === "no" ? "no" : ""}>
         {value}
-      </span>
+      </strong>
     </div>
   );
 }

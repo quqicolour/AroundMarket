@@ -1,10 +1,15 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { useTxToast } from "./TxToastContext";
 import { Loader2, X, Hash } from "lucide-react";
 import { ERC20_DECIMALS_ABI } from "../config/contractAbis";
 import { unitsToNumber } from "../utils/tradingMath";
-import { SubgraphLimitOrder, useSubgraphUserOrders } from "../utils/subgraph";
+import {
+  activeOrders,
+  sortLimitOrdersByPriceTime,
+  SubgraphLimitOrder,
+  useSubgraphUserOrders,
+} from "../utils/subgraph";
 
 interface Props {
  marketAddr: string;
@@ -19,6 +24,10 @@ export default function MyOrders({ marketAddr, marketId, collateralAddr }: Props
  const { showPending, showSuccess, showError } = useTxToast();
 
  const { data: orders = [], isLoading: ordersLoading, refetch: refetchOrders } = useSubgraphUserOrders(marketId, address);
+ const sortedOrders = useMemo(
+  () => sortLimitOrdersByPriceTime(activeOrders(orders).filter(order => BigInt(order.remaining) > 0n)),
+  [orders],
+ );
 
   const { data: collateralDecimalsRaw } = useReadContract({
   abi: ERC20_DECIMALS_ABI,
@@ -100,18 +109,18 @@ export default function MyOrders({ marketAddr, marketId, collateralAddr }: Props
  );
  }
 
- if (orders.length === 0) {
+ if (sortedOrders.length === 0) {
  return (
  <div className="text-center py-16 text-gray-400">
  <div className="text-3xl mb-2 opacity-30">📝</div>
- <p className="text-sm">No orders in this market yet</p>
+ <p className="text-sm">No active orders in this market yet</p>
  </div>
  );
  }
 
  return (
  <div className="space-y-2">
- {orders.map((order) => (
+ {sortedOrders.map((order) => (
  <MyOrderRow
  key={order.id}
  order={order}
