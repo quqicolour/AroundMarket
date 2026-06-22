@@ -89,6 +89,16 @@ export function calcBufferedMaxCost(payAmount: bigint): bigint {
   return (payAmount * 110n) / 100n;
 }
 
+export function calcTakerFeeAllowance(maxCost: bigint, feeRate: bigint): bigint {
+  if (maxCost <= 0n || feeRate <= 0n) return 0n;
+  return (maxCost * feeRate) / 1_000_000n;
+}
+
+export function calcMarketBuyApproval(maxCost: bigint, feeRate: bigint): bigint {
+  if (maxCost <= 0n) return 0n;
+  return maxCost + calcTakerFeeAllowance(maxCost, feeRate);
+}
+
 export function calcMarketSellCostPrice(isYes: boolean, bestBidYes?: bigint, bestAskNo?: bigint): bigint {
   return isYes ? (bestBidYes ?? 0n) : (bestAskNo ?? 0n);
 }

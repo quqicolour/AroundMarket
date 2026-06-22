@@ -8,10 +8,10 @@ interface Props {
 
 export default function SectionHeader({ title, subtitle, action }: Props) {
   return (
-    <div className="flex items-center justify-between mb-4">
+    <div className="page-header" style={{ marginBottom: 16 }}>
       <div>
-        <h2 className="text-base font-bold text-gray-900">{title}</h2>
-        {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
+        <h1 style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.01em" }}>{title}</h1>
+        {subtitle && <p>{subtitle}</p>}
       </div>
       {action}
     </div>

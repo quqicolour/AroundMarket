@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  bestAsk,
+  bestBid,
   bestCollateralBuyPrice,
+  bestShareSellPrice,
   buildOutcomeOrderBookLevels,
   sortLimitOrdersByPriceTime,
 } from "../src/utils/subgraph.ts";
@@ -90,4 +93,60 @@ test("market sell reference only uses collateral buy orders", () => {
   ];
 
   assert.equal(bestCollateralBuyPrice(orders, "YES"), 420000000000000000n);
+});
+
+test("market buy reference only uses share sell orders", () => {
+  const orders = [
+    order({
+      orderId: 1,
+      isYes: false,
+      kind: "COLLATERAL_BUY",
+      price: "900000000000000000",
+    }),
+    order({
+      orderId: 2,
+      isYes: false,
+      kind: "SHARE_SELL",
+      shareOutcome: "NO",
+      price: "470000000000000000",
+    }),
+  ];
+
+  assert.equal(bestAsk(orders), 470000000000000000n);
+});
+
+test("market buy YES uses YES share sell orders", () => {
+  const orders = [
+    order({
+      orderId: 1,
+      isYes: true,
+      kind: "COLLATERAL_BUY",
+      price: "410000000000000000",
+    }),
+    order({
+      orderId: 2,
+      isYes: true,
+      kind: "SHARE_SELL",
+      shareOutcome: "YES",
+      price: "880000000000000000",
+    }),
+    order({
+      orderId: 3,
+      isYes: false,
+      kind: "SHARE_SELL",
+      shareOutcome: "YES",
+      price: "460000000000000000",
+    }),
+    order({
+      orderId: 4,
+      isYes: false,
+      kind: "SHARE_SELL",
+      shareOutcome: "NO",
+      price: "310000000000000000",
+    }),
+  ];
+
+  assert.equal(bestShareSellPrice(orders, "YES"), 460000000000000000n);
+  assert.equal(bestShareSellPrice(orders, "NO"), 310000000000000000n);
+  assert.equal(bestBid(orders), 410000000000000000n);
 });

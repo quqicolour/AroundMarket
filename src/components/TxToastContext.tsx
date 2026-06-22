@@ -20,7 +20,7 @@ export function TxToastProvider({ children }: { children: React.ReactNode }) {
     explorerUrl: string;
   } | null>(null);
 
-  const txUrl = useCallback((hash: string) => `https://testnet.arcscan.io/tx/${hash}`, []);
+  const txUrl = useCallback((hash: string) => `https://testnet.arcscan.app/tx/${hash}`, []);
 
   const normalizeExplorerUrl = useCallback((hashOrUrl?: string) => {
     if (!hashOrUrl) return "";

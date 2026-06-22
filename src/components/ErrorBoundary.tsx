@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from "react";
+import { AlertTriangle, RotateCcw } from "lucide-react";
 
 interface Props { children: ReactNode }
 interface State { hasError: boolean; error?: Error }
@@ -16,17 +17,19 @@ export class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex flex-col items-center justify-center min-h-64 gap-4 py-20">
-          <div className="text-5xl">⚠️</div>
-          <div className="text-center">
-            <h3 className="font-semibold text-gray-700">页面出错</h3>
-            <p className="text-xs text-gray-400 mt-1 max-w-sm font-mono">{this.state.error?.message}</p>
-          </div>
+        <div className="empty-block" style={{ minHeight: 280, padding: 48 }}>
+          <span className="empty-icon" style={{ color: "var(--no)" }}><AlertTriangle size={32} strokeWidth={1.8} aria-hidden="true" /></span>
+          <p className="empty-title">Something went wrong</p>
+          <p className="empty-desc" style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--text-tertiary)" }}>
+            {this.state.error?.message}
+          </p>
           <button
             onClick={() => this.setState({ hasError: false })}
-            className="btn-primary text-sm"
+            className="btn btn-primary btn-sm"
+            style={{ marginTop: 12 }}
           >
-            重试
+            <RotateCcw size={14} strokeWidth={2.2} aria-hidden="true" />
+            Retry
           </button>
         </div>
       );

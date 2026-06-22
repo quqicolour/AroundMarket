@@ -1,19 +1,19 @@
 import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
+import { ChevronLeft, ChevronDown, ExternalLink } from "lucide-react";
 import { formatAddress } from "../utils/format";
 import KLineChart from "../components/KLineChart";
 import OrderBookView from "../components/OrderBookView";
 import RecentTrades from "../components/RecentTrades";
 import MyOrders from "../components/MyOrders";
 import CollateralSplitter from "../components/CollateralSplitter";
+import TradingForm from "../components/TradingForm";
 import { getMarketTimingStatus, useUnixNow } from "../utils/marketTime";
 import { marketToTuple, useSubgraphMarket } from "../utils/subgraph";
 
 type TabType = "chart" | "orderbook" | "myorders";
 
-const EXPLORER_BASE = "https://testnet.arcscan.io";
-
-// Build explorer URL for an address or tx
+const EXPLORER_BASE = "https://testnet.arcscan.app";
 function explorerUrl(type: "address" | "tx", value: string): string {
   return `${EXPLORER_BASE}/${type}/${value}`;
 }
@@ -52,11 +52,7 @@ export default function MarketDetailPage() {
 
   if (!marketData) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 300, gap: 16 }}>
-        <p style={{ fontWeight: 600, color: "var(--text-secondary)", fontSize: 16 }}>Market #{id} Not Found</p>
-        <p style={{ fontSize: 13, color: "var(--text-tertiary)" }}>This market may not exist or has been removed</p>
-        <Link to="/" className="btn-ghost" style={{ fontSize: 13 }}>← Back</Link>
-      </div>
+      <NotFound id={id} />
     );
   }
 
@@ -78,16 +74,9 @@ export default function MarketDetailPage() {
   const expiryTimeLabel = endTime > 0 ? new Date(endTime * 1000).toLocaleString() : "Schedule pending";
 
   if (!orderBookAddr || orderBookAddr === "0x0000000000000000000000000000000000000000") {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 300, gap: 16 }}>
-        <p style={{ fontWeight: 600, color: "var(--text-secondary)", fontSize: 16 }}>Market #{id} Not Found</p>
-        <p style={{ fontSize: 13, color: "var(--text-tertiary)" }}>This market may not exist or has been removed</p>
-        <Link to="/" className="btn-ghost" style={{ fontSize: 13 }}>← Back</Link>
-      </div>
-    );
+    return <NotFound id={id} />;
   }
 
-  // Build marketData tuple for TradingForm.
   const marketDataTuple: any = marketToTuple(marketData);
   const timing = getMarketTimingStatus(startTime, endTime, resolved, nowTime);
 
@@ -98,138 +87,122 @@ export default function MarketDetailPage() {
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* Back nav */}
-      <Link to="/" style={backLink}>
-        <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-          <polyline points="15 18 9 12 15 6" />
-        </svg>
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <Link to="/" className="back-link">
+        <ChevronLeft size={14} strokeWidth={2.2} aria-hidden="true" />
         Back to Markets
       </Link>
 
-      {/* Two-column layout */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: 16, alignItems: "start" }}>
-        {/* Left — main content */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div className="market-layout">
+        <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
+          <section className="detail-hero">
+            <div className="detail-hero-meta">
+              <span className="chip chip-mono">#{id}</span>
+              <span className={`chip ${timing.kind === "active" ? "chip-yes" : timing.kind === "awaiting" ? "chip-warning" : "chip-neutral"}`}>
+                <span className={`status-dot ${timing.kind === "active" ? "live" : ""}`} aria-hidden="true" />
+                {timing.statusLabel}
+              </span>
+              <span className="eyebrow" style={{ color: "var(--text-tertiary)" }}>{timing.settlementLabel}</span>
+              {fee > 0 && <span className="chip chip-neutral">Fee {(fee / 1e6 * 100).toFixed(2)}%</span>}
+            </div>
 
-          {/* Market info */}
-          <div className="market-detail-hero">
-            <div className="market-detail-copy">
-              <div className="market-detail-meta-row">
-                <span className="market-id-chip">#{id}</span>
-                <span className={timing.kind === "active" ? "market-state-chip active" : "market-state-chip"}>
-                  {timing.statusLabel}
-                </span>
-                <span>{timing.settlementLabel}</span>
-                {fee > 0 && <span>Fee {(fee / 1e6 * 100).toFixed(2)}%</span>}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <h1 className="detail-hero-title">{question}</h1>
+              <p className="detail-hero-desc">{dataSource}</p>
+            </div>
+
+            <div className="detail-hero-creator">
+              <span>Creator</span>
+              <a href={explorerUrl("address", creator)} target="_blank" rel="noreferrer">
+                {formatAddress(creator, 5)}
+              </a>
+            </div>
+
+            <div className="detail-hero-stats">
+              <div className="stat-tile">
+                <span className="stat-label">Trades</span>
+                <span className="stat-value">{tradeCount}</span>
               </div>
-
-              <h1>{question}</h1>
-              <p>{dataSource}</p>
-
-              <div className="market-detail-owner">
-                <span>Creator</span>
-                <a href={explorerUrl("address", creator)} target="_blank" rel="noreferrer">
-                  {formatAddress(creator, 5)}
-                </a>
+              <div className="stat-tile">
+                <span className="stat-label">Volume</span>
+                <span className="stat-value">{volume}</span>
+              </div>
+              <div className="stat-tile stat-tile-time">
+                <span className="stat-label">Ends in</span>
+                <span className="stat-value">{timing.countdownLabel}</span>
+                <small style={{ color: "var(--text-secondary)", fontSize: 11, lineHeight: 1.25 }}>{expiryTimeLabel}</small>
               </div>
             </div>
 
-            <div className="market-detail-stats">
-              <MarketStat label="Trades" value={tradeCount} />
-              <MarketStat label="Volume" value={volume} />
-              <div className="market-time-card">
-                <strong>{timing.countdownLabel}</strong>
-                <small>{expiryTimeLabel}</small>
-              </div>
-            </div>
-
-            {/* Collapsible contract addresses */}
             <button
               type="button"
-              onClick={() => setAddrExpanded(v => !v)}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                width: "100%", padding: "8px 12px", borderRadius: 10,
-                background: "var(--bg-elevated)", border: "1px solid var(--border)",
-                cursor: "pointer", transition: "all 150ms",
-              }}
+              onClick={() => setAddrExpanded((v) => !v)}
+              aria-expanded={addrExpanded}
+              className="collapsible-trigger"
             >
-              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>Contract Addresses</span>
-              <svg
-                width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2}
-                viewBox="0 0 24 24" style={{ color: "var(--text-tertiary)", transition: "transform 200ms", transform: addrExpanded ? "rotate(180deg)" : "rotate(0deg)" }}
-              >
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
+              <span>Contract Addresses</span>
+              <ChevronDown size={14} className="chev" aria-hidden="true" />
             </button>
 
             {addrExpanded && (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10 }}>
-                <InfoTileLink label="Market" value={formatAddress(marketAddr, 5)} address={marketAddr} mono />
-                <InfoTileLink label="Order Book" value={formatAddress(orderBookAddr, 5)} address={orderBookAddr} mono />
-                <InfoTileLink label="Collateral" value={formatAddress(collateral, 5)} address={collateral} mono />
-                <InfoTileLink label="Condition Tokens" value={formatAddress(conditionAddr, 5)} address={conditionAddr} mono />
-                <InfoTileLink label="Matching Engine" value={formatAddress(matchingEngineAddr, 5)} address={matchingEngineAddr} mono />
-                <InfoTileLink label="Condition ID" value={formatAddress(conditionId, 5)} address={conditionId} mono />
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 8 }}>
+                <InfoTileLink label="Market" value={formatAddress(marketAddr, 5)} address={marketAddr} />
+                <InfoTileLink label="Order Book" value={formatAddress(orderBookAddr, 5)} address={orderBookAddr} />
+                <InfoTileLink label="Collateral" value={formatAddress(collateral, 5)} address={collateral} />
+                <InfoTileLink label="Condition Tokens" value={formatAddress(conditionAddr, 5)} address={conditionAddr} />
+                <InfoTileLink label="Matching Engine" value={formatAddress(matchingEngineAddr, 5)} address={matchingEngineAddr} />
+                <InfoTileLink label="Condition ID" value={formatAddress(conditionId, 5)} address={conditionId} />
               </div>
             )}
-          </div>
+          </section>
 
-          {/* Tabs */}
           <div className="card" style={{ overflow: "hidden", padding: 0 }}>
-            <div style={{ display: "flex", borderBottom: "1px solid var(--border)" }}>
-              {tabs.map(tab => (
+            <div role="tablist" className="segmented underlined" style={{ borderRadius: 0, padding: "0 12px" }}>
+              {tabs.map((tab) => (
                 <button
                   key={tab.key}
+                  role="tab"
+                  aria-selected={activeTab === tab.key}
                   onClick={() => setActiveTab(tab.key)}
-                  style={{
-                    flex: 1, padding: "13px 8px", fontSize: 13, fontWeight: 600,
-                    transition: "all 150ms",
-                    background: activeTab === tab.key ? "var(--primary-light)" : "transparent",
-                    color: activeTab === tab.key ? "var(--primary-text)" : "var(--text-tertiary)",
-                    borderBottom: activeTab === tab.key ? "2px solid var(--primary)" : "2px solid transparent",
-                  }}
+                  className={`seg-item ${activeTab === tab.key ? "active" : ""}`}
+                  style={{ flex: 1 }}
                 >
                   {tab.label}
                 </button>
               ))}
             </div>
 
-            <div style={{ padding: 0 }}>
+            <div>
               {activeTab === "chart" && (
-                <div className="market-chart-section">
-                  <KLineChart marketId={id} isYes width={760} height={380} />
-                </div>
+                <KLineChart marketId={id} isYes width={760} height={380} />
               )}
               {activeTab === "orderbook" && (
                 <div style={{ padding: 16 }}>
                   <OrderBookView marketId={id} collateralAddr={collateral} />
                 </div>
               )}
- {activeTab === "myorders" && (
- <div style={{ padding:16 }}>
-  <MyOrders marketAddr={marketAddr} marketId={id} collateralAddr={collateral} />
- </div>
- )}
+              {activeTab === "myorders" && (
+                <div style={{ padding: 16 }}>
+                  <MyOrders marketAddr={marketAddr} marketId={id} collateralAddr={collateral} />
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Recent Trades — at the bottom */}
           <RecentTrades marketId={id} matchingEngineAddr={matchingEngineAddr} collateralAddr={collateral} />
         </div>
 
-        {/* Right — sticky trading rail */}
-        <div style={{ position: "sticky", top: 88, display: "flex", flexDirection: "column", gap: 12 }}>
+        <div className="trade-rail">
           <CollateralSplitter
             marketAddr={marketAddr}
             collateralAddr={collateral}
             isResolved={resolved}
-            onSplitSuccess={() => setBalanceRefreshSignal(value => value + 1)}
+            onSplitSuccess={() => setBalanceRefreshSignal((value) => value + 1)}
           />
-          <TradingFormWrapper
+          <TradingForm
             marketData={marketDataTuple}
             marketId={id}
+            initialSide="yes"
             balanceRefreshSignal={balanceRefreshSignal}
           />
         </div>
@@ -238,89 +211,49 @@ export default function MarketDetailPage() {
   );
 }
 
-// Wrapper that imports TradingForm (avoids circular)
-import TradingForm from "../components/TradingForm";
-
-function MarketStat({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+function NotFound({ id }: { id: number }) {
   return (
-    <div className="market-stat">
-      <span>{label}</span>
-      <strong>{value}</strong>
+    <div className="empty-block" style={{ minHeight: 300 }}>
+      <span className="empty-icon">🔍</span>
+      <p className="empty-title">Market #{id} Not Found</p>
+      <p className="empty-desc">This market may not exist or has been removed.</p>
+      <Link to="/" className="btn btn-soft btn-sm" style={{ marginTop: 12 }}>
+        <ChevronLeft size={14} strokeWidth={2.2} aria-hidden="true" />
+        Back to Markets
+      </Link>
     </div>
   );
 }
 
-// ── InfoTile with external link ──────────────────────────────────────────────
-function InfoTileLink({ label, value, address, mono }: { label: string; value: string; address: string; mono?: boolean }) {
+function InfoTileLink({ label, value, address }: { label: string; value: string; address: string }) {
   return (
-    <a
-      href={explorerUrl("address", address)}
-      target="_blank"
-      rel="noopener noreferrer"
-      style={{
-        display: "block",
-        background: "var(--bg-elevated)",
-        borderRadius: 12,
-        padding: "10px 14px",
-        textDecoration: "none",
-        transition: "all 150ms",
-        border: "1px solid var(--border)",
-      }}
-      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = "var(--border-strong)"; (e.currentTarget as HTMLElement).style.background = "var(--bg-overlay)"; }}
-      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = "var(--border)"; (e.currentTarget as HTMLElement).style.background = "var(--bg-elevated)"; }}
-    >
-      <div style={{ fontSize: 10, color: "var(--text-tertiary)", marginBottom: 3, display: "flex", alignItems: "center", gap: 4 }}>
+    <a href={explorerUrl("address", address)} target="_blank" rel="noopener noreferrer" className="info-tile-link">
+      <span className="info-label">
         {label}
-        <svg width="8" height="8" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" style={{ opacity: 0.4 }}>
-          <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" />
-        </svg>
-      </div>
-      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)", fontFamily: mono ? "'JetBrains Mono', monospace" : "inherit" }}>{value}</div>
+        <ExternalLink size={10} strokeWidth={2.2} aria-hidden="true" />
+      </span>
+      <span className="info-value">{value}</span>
     </a>
-  );
-}
-
-function TradingFormWrapper({
-  marketData,
-  marketId,
-  balanceRefreshSignal,
-}: {
-  marketData: any;
-  marketId: number;
-  balanceRefreshSignal: number;
-}) {
-  return (
-    <TradingForm
-      marketData={marketData}
-      marketId={marketId}
-      initialSide="yes"
-      balanceRefreshSignal={balanceRefreshSignal}
-    />
   );
 }
 
 function MarketDetailSkeleton() {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
       <div className="card" style={{ padding: 24 }}>
-        <div style={{ width: 80, height: 16, borderRadius: 6, background: "var(--bg-elevated)", marginBottom: 16 }} />
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          {[0, 1, 2, 3].map(i => <div key={i} style={{ height: 56, borderRadius: 12, background: "var(--bg-elevated)" }} />)}
+        <div className="skeleton" style={{ width: 80, height: 16, marginBottom: 16 }} />
+        <div className="skeleton" style={{ width: "60%", height: 24, marginBottom: 12 }} />
+        <div className="skeleton" style={{ width: "80%", height: 14, marginBottom: 24 }} />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1.2fr", gap: 10 }}>
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="skeleton" style={{ height: 78, borderRadius: 12 }} />
+          ))}
         </div>
       </div>
-      <div className="card" style={{ padding: 24, height: 200 }} />
+      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        <div style={{ height: 48, borderBottom: "1px solid var(--border)" }} />
+        <div className="skeleton" style={{ height: 380, margin: 16, borderRadius: 12 }} />
+      </div>
     </div>
   );
 }
-
-const backLink = {
-  display: "inline-flex", alignItems: "center", gap: 6,
-  fontSize: 13, color: "var(--text-tertiary)",
-  transition: "color 150ms",
-};

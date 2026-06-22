@@ -63,7 +63,7 @@ function toCandle(candle: SubgraphMarketCandle): Candle {
 }
 
 function formatPrice(price: number): string {
-  return `${(price * 100).toFixed(1)}c`;
+  return `${(price * 100).toFixed(1)}¢`;
 }
 
 function formatPercent(price: number): string {
@@ -135,8 +135,8 @@ export default function KLineChart({
         changeLabel=""
         isUp
       >
-        <div className="pm-chart-loading" style={{ minHeight: height }}>
-          {Array.from({ length: 8 }).map((_, i) => (
+        <div className="chart-loading" style={{ minHeight: height }}>
+          {Array.from({ length: 6 }).map((_, i) => (
             <span key={i} />
           ))}
         </div>
@@ -157,7 +157,7 @@ export default function KLineChart({
         changeLabel=""
         isUp
       >
-        <div className="pm-chart-empty" style={{ minHeight: height }}>
+        <div className="chart-empty" style={{ minHeight: height }}>
           <strong>{isError ? "Chart unavailable" : "No price history yet"}</strong>
           <span>
             {isError
@@ -193,15 +193,12 @@ export default function KLineChart({
   function pxY(price: number): number {
     return chartH - padBottom - ((price - priceMin) / priceRange) * plotH;
   }
-
   function pxX(i: number): number {
     return padLeft + step * i + step / 2;
   }
-
   function pxVol(v: number): number {
     return chartH + gap + volH - (v / (volMax || 1)) * volH;
   }
-
   function snapToCandle(mouseX: number): number {
     return Math.floor((mouseX - padLeft) / step);
   }
@@ -215,16 +212,12 @@ export default function KLineChart({
     setSelectedIdx(clamped);
     setTooltip(candles[clamped]);
   }
-
   function handleMouseLeave() {
     setSelectedIdx(null);
     setTooltip(null);
   }
 
-  const gridPrices = Array.from(
-    { length: 5 },
-    (_, i) => priceMin + (priceRange * i) / 4,
-  );
+  const gridPrices = Array.from({ length: 5 }, (_, i) => priceMin + (priceRange * i) / 4);
   const timeGridIndices = Array.from(new Set([
     0,
     Math.floor(candles.length * 0.25),
@@ -237,20 +230,10 @@ export default function KLineChart({
     const isGreen = c.close >= c.open;
     const volume = c.volume || c.tradeCount;
     const barH = Math.max(2, (volume / (volMax || 1)) * volH);
-    return {
-      x: pxX(i) - volumeBarW / 2,
-      y: pxVol(volume),
-      w: volumeBarW,
-      h: barH,
-      isGreen,
-    };
+    return { x: pxX(i) - volumeBarW / 2, y: pxVol(volume), w: volumeBarW, h: barH, isGreen };
   });
 
-  const linePoints = candles.map((c, i) => ({
-    x: pxX(i),
-    y: pxY(c.close),
-    candle: c,
-  }));
+  const linePoints = candles.map((c, i) => ({ x: pxX(i), y: pxY(c.close), candle: c }));
   const linePath = linePoints
     .map((point, i) => `${i === 0 ? "M" : "L"} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`)
     .join(" ");
@@ -271,7 +254,7 @@ export default function KLineChart({
       changeLabel={`${isUp ? "+" : ""}${changePct.toFixed(2)}%`}
       isUp={isUp}
     >
-      <div className="pm-chart-canvas">
+      <div className="chart-canvas">
         <svg
           ref={svgRef}
           width="100%"
@@ -290,7 +273,7 @@ export default function KLineChart({
               y1={padTop}
               x2={pxX(i)}
               y2={chartH + gap + volH}
-              className="pm-grid-line vertical"
+              className="chart-grid vertical"
             />
           ))}
 
@@ -298,8 +281,8 @@ export default function KLineChart({
             const y = pxY(p);
             return (
               <g key={i}>
-                <line x1={padLeft} y1={y} x2={width - padRight} y2={y} className="pm-grid-line" />
-                <text x={width - padRight + 10} y={y + 4} className="pm-axis-label">
+                <line x1={padLeft} y1={y} x2={width - padRight} y2={y} className="chart-grid" />
+                <text x={width - padRight + 10} y={y + 4} className="chart-axis-label">
                   {formatPrice(p)}
                 </text>
               </g>
@@ -313,26 +296,26 @@ export default function KLineChart({
               y={v.y}
               width={v.w}
               height={v.h}
-              className={v.isGreen ? "pm-volume-bar up" : "pm-volume-bar down"}
+              className={v.isGreen ? "chart-volume-bar up" : "chart-volume-bar down"}
               rx={1}
             />
           ))}
 
-          <path className={`pm-line-area ${lineTone}`} d={areaPath} />
-          <path className={`pm-price-line ${lineTone}`} d={linePath} />
+          <path className={`chart-line-area ${lineTone}`} d={areaPath} />
+          <path className={`chart-price-line ${lineTone}`} d={linePath} />
 
           {selectedIdx !== null && tooltip && (
             <>
-              <line x1={pxX(selectedIdx)} y1={padTop} x2={pxX(selectedIdx)} y2={chartH - padBottom} className="pm-crosshair" />
-              <line x1={padLeft} y1={pxY(tooltip.close)} x2={width - padRight} y2={pxY(tooltip.close)} className="pm-crosshair" />
+              <line x1={pxX(selectedIdx)} y1={padTop} x2={pxX(selectedIdx)} y2={chartH - padBottom} className="chart-crosshair" />
+              <line x1={padLeft} y1={pxY(tooltip.close)} x2={width - padRight} y2={pxY(tooltip.close)} className="chart-crosshair" />
               <circle
                 cx={pxX(selectedIdx)}
                 cy={pxY(tooltip.close)}
                 r={4}
-                className={`pm-line-point ${lineTone}`}
+                className={`chart-line-point ${lineTone}`}
               />
-              <rect x={width - padRight + 6} y={pxY(tooltip.close) - 11} width={46} height={20} rx={5} className="pm-price-tag-bg" />
-              <text x={width - padRight + 29} y={pxY(tooltip.close) + 4} textAnchor="middle" className="pm-price-tag">
+              <rect x={width - padRight + 6} y={pxY(tooltip.close) - 11} width={46} height={20} rx={5} className="chart-price-tag-bg" />
+              <text x={width - padRight + 29} y={pxY(tooltip.close) + 4} textAnchor="middle" className="chart-price-tag">
                 {formatPrice(tooltip.close)}
               </text>
             </>
@@ -340,7 +323,7 @@ export default function KLineChart({
 
           {[0, Math.floor(candles.length / 2), candles.length - 1].map((i) => (
             candles[i] ? (
-              <text key={i} x={pxX(i)} y={height - 7} textAnchor="middle" className="pm-time-label">
+              <text key={i} x={pxX(i)} y={height - 7} textAnchor="middle" className="chart-time-label">
                 {formatAxisTime(candles[i].ts, tf)}
               </text>
             ) : null
@@ -349,13 +332,13 @@ export default function KLineChart({
 
         {tooltip && selectedIdx !== null && (
           <div
-            className="pm-chart-tooltip"
+            className="chart-tooltip"
             style={{
-              left: `min(${Math.max(8, (pxX(selectedIdx) / width) * 100)}%, calc(100% - 172px))`,
+              left: `min(${Math.max(8, (pxX(selectedIdx) / width) * 100)}%, calc(100% - 176px))`,
               top: Math.max(pxY(tooltip.high) - 16, 10),
             }}
           >
-            <div className="pm-chart-tooltip-time">
+            <div className="chart-tooltip-time">
               {new Date(tooltip.ts).toLocaleString("en-US", {
                 month: "short",
                 day: "numeric",
@@ -399,32 +382,46 @@ function ChartShell({
   isUp: boolean;
 }) {
   return (
-    <section className="pm-chart-panel">
-      <div className="pm-chart-header">
-        <div className="pm-chart-price-block">
-          <span className={side === "yes" ? "pm-outcome-chip yes" : "pm-outcome-chip no"}>{sideLabel}</span>
-          <strong>{priceLabel}</strong>
-          <span className="pm-chart-percent">{percentLabel}</span>
+    <section className="chart-panel">
+      <div className="chart-head">
+        <div className="chart-price-block">
+          <span className={`chart-outcome-chip ${side}`}>{sideLabel}</span>
+          <strong className="chart-price-value">{priceLabel}</strong>
+          <span className="chart-price-percent">{percentLabel}</span>
           {changeLabel && (
-            <span className={isUp ? "pm-change up" : "pm-change down"}>{changeLabel}</span>
+            <span className={`chart-change ${isUp ? "up" : "down"}`}>{changeLabel}</span>
           )}
         </div>
 
-        <div className="pm-chart-controls">
-          <div className="pm-side-toggle" aria-label="Chart outcome">
-            <button type="button" className={side === "yes" ? "active yes" : ""} onClick={() => setSide("yes")}>
+        <div className="chart-controls">
+          <div className="chart-tabs" role="tablist" aria-label="Chart outcome">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={side === "yes"}
+              className={side === "yes" ? "active yes" : ""}
+              onClick={() => setSide("yes")}
+            >
               YES
             </button>
-            <button type="button" className={side === "no" ? "active no" : ""} onClick={() => setSide("no")}>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={side === "no"}
+              className={side === "no" ? "active no" : ""}
+              onClick={() => setSide("no")}
+            >
               NO
             </button>
           </div>
 
-          <div className="pm-timeframe-tabs" aria-label="Chart timeframe">
+          <div className="chart-tabs" role="tablist" aria-label="Chart timeframe">
             {TIMEFRAMES.map((f) => (
               <button
                 key={f.label}
                 type="button"
+                role="tab"
+                aria-selected={tf === f.label}
                 className={tf === f.label ? "active" : ""}
                 onClick={() => setTf(f.label)}
               >
@@ -450,7 +447,7 @@ function TooltipRow({
   tone?: "yes" | "no";
 }) {
   return (
-    <div className="pm-tooltip-row">
+    <div className="chart-tooltip-row">
       <span>{label}</span>
       <strong className={tone === "yes" ? "yes" : tone === "no" ? "no" : ""}>
         {value}

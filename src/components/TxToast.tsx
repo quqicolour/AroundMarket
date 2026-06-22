@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Loader2, CheckCircle2, XCircle, ExternalLink } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, ExternalLink, X } from "lucide-react";
 
 interface Props {
   status: "pending" | "success" | "error";
@@ -17,28 +17,39 @@ export default function TxToast({ status, label, explorerUrl, onClose }: Props) 
   }, [status, onClose]);
 
   return (
-    <div className="fixed bottom-6 right-6 z-50">
-      <div className={
-        `flex items-center gap-3 px-5 py-4 rounded-2xl shadow-lg text-white min-w-64 text-sm font-medium ${
-          status === "success" ? "bg-gradient-to-r from-emerald-500 to-teal-500" :
-          status === "error" ? "bg-gradient-to-r from-rose-500 to-pink-500" :
-          "bg-gradient-to-r from-gray-500 to-gray-600"
-        }`
-      }>
-        {status === "pending" && <Loader2 size={18} className="animate-spin flex-shrink-0" />}
-        {status === "success" && <CheckCircle2 size={18} className="flex-shrink-0" />}
-        {status === "error" && <XCircle size={18} className="flex-shrink-0" />}
-        <span className="flex-1">{label}</span>
+    <div
+      style={{
+        position: "fixed",
+        right: 24,
+        bottom: 24,
+        zIndex: 50,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-end",
+        gap: 8,
+        maxWidth: 360,
+      }}
+    >
+      <div className={`tx-toast ${status}`} role="status" aria-live="polite">
+        <span className="tx-icon" aria-hidden="true">
+          {status === "pending" && <Loader2 size={16} strokeWidth={2.2} />}
+          {status === "success" && <CheckCircle2 size={16} strokeWidth={2.2} />}
+          {status === "error" && <XCircle size={16} strokeWidth={2.2} />}
+        </span>
+        <span className="tx-label">{label}</span>
         {explorerUrl && status !== "pending" && (
-          <a
-            href={explorerUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1 text-xs opacity-80 hover:opacity-100 transition"
-          >
-            <ExternalLink size={12} />
+          <a href={explorerUrl} target="_blank" rel="noopener noreferrer" className="tx-explorer" aria-label="View on explorer">
+            <ExternalLink size={12} strokeWidth={2.2} />
           </a>
         )}
+        <button
+          type="button"
+          onClick={onClose}
+          className="tx-explorer"
+          aria-label="Dismiss"
+        >
+          <X size={12} strokeWidth={2.2} />
+        </button>
       </div>
     </div>
   );

@@ -17,8 +17,8 @@ const arcTestnet = defineChain({
   blockExplorers: {
     default: {
       name: "Arcscan",
-      url: "https://testnet.arcscan.io",
-      apiUrl: "https://testnet.arcscan.io/api",
+      url: "https://testnet.arcscan.app",
+      apiUrl: "https://testnet.arcscan.app/api",
     },
   },
 });
@@ -38,8 +38,8 @@ export const config = getDefaultConfig({
 });
 
 export const CONTRACTS = {
-  PredictionMarketFactory: "0x532C9455d213802b30ea0d53A55B730315A62dBc",
-  SettlementManager: "0xBF53f4405399f2ae04Bafd4c40780BAf6E405Cb0",
-  ConditionalTokens: "0xCA483FbA80931C18CdE752c35d547c7e5BF57d6b",
-  Collateral: "0x2375504de874C2262776F640389bF31437627260",
+  PredictionMarketFactory: "0x5c1D5eFF4f320eAD937C5F5b6D08E827f011BD82",
+  SettlementManager: "0x717D1F2548719A2a1da6b78f2F613c49E2B82260",
+  ConditionalTokens: "0xeCda894e6d7965ca18A14D9b896682326696c779",
+  Collateral: "0x9f44808f66EDD95542D8a4dF6E355E5D218cFc61",
 } as const;

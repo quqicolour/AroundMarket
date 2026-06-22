@@ -1,7 +1,12 @@
 import { type FormEvent, useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Split } from "lucide-react";
 import { erc20Abi } from "viem";
-import { useAccount, useReadContract, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
+import {
+  useAccount,
+  useReadContract,
+  useWaitForTransactionReceipt,
+  useWriteContract,
+} from "wagmi";
 import { ABIs } from "../abis";
 import { decimalToUnits } from "../utils/tradingMath";
 import { useTxToast } from "./TxToastContext";
@@ -39,7 +44,12 @@ export default function CollateralSplitter({
     functionName: "allowance",
     args: [user as `0x${string}`, marketAddr as `0x${string}`],
     query: {
-      enabled: isConnected && !!user && !!collateralAddr && !!marketAddr && splitAmount > 0n,
+      enabled:
+        isConnected &&
+        !!user &&
+        !!collateralAddr &&
+        !!marketAddr &&
+        splitAmount > 0n,
     },
   });
 
@@ -91,7 +101,6 @@ export default function CollateralSplitter({
       });
       return;
     }
-
     splitCollateral();
   }
 
@@ -127,7 +136,8 @@ export default function CollateralSplitter({
   }, [splitError]);
 
   const amountNumber = parseFloat(amountInput) || 0;
-  const isBusy = isApprovePending || isApproving || isSplitPending || isSplitting;
+  const isBusy =
+    isApprovePending || isApproving || isSplitPending || isSplitting;
   const disabled = !isConnected || isResolved || splitAmount <= 0n || isBusy;
   const buttonLabel = !isConnected
     ? "Connect Wallet"
@@ -142,13 +152,13 @@ export default function CollateralSplitter({
   return (
     <form className="splitter-card" onSubmit={handleSubmit}>
       <div className="splitter-card-head">
-        <div>
+        <div className="label-block">
           <span>Inventory</span>
           <strong>Split Collateral</strong>
         </div>
         <div className="splitter-ratio">
-          <span>1 USDC</span>
-          <strong>1 YES + 1 NO</strong>
+          <div className="k">1 USDC</div>
+          <div className="v">1 YES + 1 NO</div>
         </div>
       </div>
 
@@ -159,23 +169,33 @@ export default function CollateralSplitter({
             min="0"
             step="0.000001"
             value={amountInput}
-            onChange={event => setAmountInput(event.target.value)}
+            onChange={(event) => setAmountInput(event.target.value)}
             placeholder="0.00"
             disabled={isResolved}
             className="input splitter-input"
           />
-          <span>USDC</span>
+          <span className="affix">USDC</span>
         </div>
         <button type="submit" disabled={disabled} className="splitter-button">
-          {isBusy && <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />}
+          {isBusy ? (
+            <Loader2
+              size={13}
+              style={{ animation: "spin 1s linear infinite" }}
+              aria-hidden="true"
+            />
+          ) : (
+            <Split size={13} strokeWidth={2.2} aria-hidden="true" />
+          )}
           {buttonLabel}
         </button>
       </div>
 
       <div className="splitter-preview">
-        <span>Output</span>
+        <span>You will receive</span>
         <strong>
-          {amountNumber > 0 ? `${amountNumber.toFixed(4)} YES + ${amountNumber.toFixed(4)} NO` : "-- YES + -- NO"}
+          {amountNumber > 0
+            ? `${amountNumber.toFixed(4)} YES + ${amountNumber.toFixed(4)} NO`
+            : "— YES + — NO"}
         </strong>
       </div>
     </form>

@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { RefreshCw } from "lucide-react";
 import MarketCard from "../components/MarketCard";
 import EmptyState from "../components/EmptyState";
 import { useSubgraphMarkets } from "../utils/subgraph";
@@ -11,39 +12,42 @@ export default function MarketsPage() {
   }, [refetch]);
 
   return (
-    <div className="space-y-5">
+    <div className="page-container" style={{ display: "flex", flexDirection: "column", gap: 0 }}>
       <div className="markets-toolbar">
-        <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: "var(--text-primary)", letterSpacing: 0 }}>Markets</h1>
-          <div className="tag-chip">
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em" }}>Markets</h1>
+          <span className="chip chip-neutral">
             {markets.length} {markets.length === 1 ? "market" : "markets"}
-          </div>
+          </span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button
-            onClick={refresh}
-            disabled={isLoading}
-            className="market-action-button"
-            style={{ opacity: isLoading ? 0.5 : 1 }}
-          >
-            Refresh
-          </button>
-        </div>
+        <button
+          onClick={refresh}
+          disabled={isLoading}
+          className="btn btn-soft btn-sm"
+          style={{ opacity: isLoading ? 0.5 : 1 }}
+        >
+          <RefreshCw size={14} strokeWidth={2.2} className={isLoading ? "animate-spin" : ""} aria-hidden="true" />
+          Refresh
+        </button>
       </div>
 
       {isLoading ? (
         <div className="markets-grid">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="card" style={{ padding: 20, opacity: 0.5 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-                <div style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--border-strong)" }} />
-                <div style={{ width: 36, height: 10, borderRadius: 4, background: "var(--bg-elevated)" }} />
+            <div key={i} className="market-card" style={{ opacity: 0.85 }}>
+              <div className="market-card-head">
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  <div className="skeleton" style={{ width: 8, height: 8, borderRadius: 999 }} />
+                  <div className="skeleton" style={{ width: 36, height: 10 }} />
+                </div>
+                <div className="skeleton" style={{ width: 60, height: 22, borderRadius: 999 }} />
               </div>
-              <div style={{ width: "60%", height: 16, borderRadius: 6, background: "var(--bg-elevated)", marginBottom: 16 }} />
-              <div style={{ height: 44, borderRadius: 10, background: "var(--bg-elevated)", marginBottom: 14 }} />
-              <div style={{ display: "flex", gap: 16, paddingTop: 12, borderTop: "1px solid var(--border-subtle)" }}>
-                <div style={{ width: 40, height: 10, borderRadius: 4, background: "var(--bg-elevated)" }} />
-                <div style={{ width: 40, height: 10, borderRadius: 4, background: "var(--bg-elevated)" }} />
+              <div className="skeleton" style={{ width: "75%", height: 18, marginTop: 4 }} />
+              <div className="skeleton" style={{ width: "55%", height: 12 }} />
+              <div className="skeleton" style={{ width: "100%", height: 60, borderRadius: 8 }} />
+              <div className="market-card-foot">
+                <div className="skeleton" style={{ width: 90, height: 28, borderRadius: 8 }} />
+                <div className="skeleton" style={{ width: 50, height: 14 }} />
               </div>
             </div>
           ))}

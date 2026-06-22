@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt, useAccount, useChainId } from "wagmi";
 import { ABIs } from "../abis";
-import { Loader2 } from "lucide-react";
+import { Loader2, ChevronDown } from "lucide-react";
 import { useTxToast } from "./TxToastContext";
 import { CONDITIONAL_TOKENS_OPERATOR_ABI, CONDITIONAL_TOKENS_POSITION_ABI } from "../config/contractAbis";
 import { erc20Abi } from "viem";
@@ -11,6 +11,7 @@ import {
   calcLimitOrderPrepay,
   calcLimitOrderBookSide,
   calcLimitShareAmount,
+  calcMarketBuyApproval,
   calcMarketSellCostPrice,
   calcMarketSellMinReceive,
   calcTradeApprovalKind,
@@ -21,17 +22,15 @@ import {
   unitsToNumber,
   weiToNumber,
 } from "../utils/tradingMath";
-import { bestAsk, bestBid, bestCollateralBuyPrice, useSubgraphMarketOrders } from "../utils/subgraph";
+import { bestAsk, bestBid, bestCollateralBuyPrice, bestShareSellPrice, useSubgraphMarketOrders } from "../utils/subgraph";
 
-// ── ERC20 ABI (inline, no extra file needed) ──────────────────────────────────
 const ERC20_ABI = erc20Abi;
 
 interface Props {
- // MarketData tuple: [creator, market, collateral, conditionTokens, orderBook, matchingEngine, conditionId, startTime, endTime, resolved, fee]
- marketData: readonly [string, string, string, string, string, string, string, bigint, bigint, boolean, number];
- marketId: number;
- initialSide?: "yes" | "no";
- balanceRefreshSignal?: number;
+  marketData: readonly [string, string, string, string, string, string, string, bigint, bigint, boolean, number];
+  marketId: number;
+  initialSide?: "yes" | "no";
+  balanceRefreshSignal?: number;
 }
 
 type TradeAction = "buy" | "sell";
@@ -64,64 +63,81 @@ function CustomSelect({
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
 
-  const selected = options.find(o => o.value === value);
+  const selected = options.find((o) => o.value === value);
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
       <button
         type="button"
         disabled={disabled}
-        onClick={() => !disabled && setOpen(v => !v)}
+        onClick={() => !disabled && setOpen((v) => !v)}
         style={{
           width: "100%",
-          padding: "9px 36px 9px 14px",
-          borderRadius: 10,
+          padding: "10px 38px 10px 14px",
+          borderRadius: "var(--r-md)",
           border: `1.5px solid ${open ? (accentColor ?? "var(--primary)") : "var(--border)"}`,
           background: "var(--bg-elevated)",
-          color: "var(--text-primary)",
-          fontSize: 14,
+          color: accentColor ?? "var(--text-primary)",
+          fontSize: 13,
           fontWeight: 700,
           fontFamily: "inherit",
           cursor: disabled ? "not-allowed" : "pointer",
           opacity: disabled ? 0.45 : 1,
           textAlign: "left",
-          transition: "border-color 150ms",
+          transition: "border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease)",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
         }}
       >
-        <span style={{ color: accentColor ?? "var(--text-primary)" }}>{selected?.label}</span>
-        <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"
-          style={{ color: "var(--text-tertiary)", transition: "transform 200ms", transform: open ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0 }}>
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
+        <span>{selected?.label}</span>
+        <ChevronDown
+          size={14}
+          strokeWidth={2.2}
+          aria-hidden="true"
+          style={{ color: "var(--text-tertiary)", transition: "transform 200ms", transform: open ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0 }}
+        />
       </button>
 
       {open && (
-        <div style={{
-          position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 50,
-          background: "var(--bg-surface)",
-          border: "1.5px solid var(--border-strong)",
-          borderRadius: 10, padding: "4px",
-          boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
-        }}>
-          {options.map(opt => (
+        <div
+          style={{
+            position: "absolute",
+            top: "calc(100% + 4px)",
+            left: 0,
+            right: 0,
+            zIndex: 50,
+            background: "var(--bg-surface)",
+            border: "1px solid var(--border)",
+            borderRadius: "var(--r-md)",
+            padding: 4,
+            boxShadow: "var(--shadow-lg)",
+          }}
+        >
+          {options.map((opt) => (
             <button
               key={opt.value}
               type="button"
-              onClick={() => { onChange(opt.value); setOpen(false); }}
-              style={{
-                width: "100%", padding: "8px 12px", borderRadius: 8,
-                border: "none", background: "transparent",
-                color: opt.value === value ? (accentColor ?? "var(--primary)") : "var(--text-primary)",
-                fontSize: 13, fontWeight: opt.value === value ? 700 : 500,
-                cursor: "pointer", textAlign: "left",
-                fontFamily: "inherit",
-                transition: "background 100ms",
+              onClick={() => {
+                onChange(opt.value);
+                setOpen(false);
               }}
-              onMouseEnter={e => (e.currentTarget.style.background = "var(--bg-overlay)")}
-              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+              style={{
+                width: "100%",
+                padding: "8px 12px",
+                borderRadius: "var(--r-sm)",
+                border: "none",
+                background: "transparent",
+                color: opt.value === value ? (accentColor ?? "var(--primary)") : "var(--text-primary)",
+                fontSize: 13,
+                fontWeight: opt.value === value ? 700 : 500,
+                cursor: "pointer",
+                textAlign: "left",
+                fontFamily: "inherit",
+                transition: "background var(--t-fast) var(--ease)",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-overlay)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
             >
               {opt.label}
             </button>
@@ -136,7 +152,7 @@ function CustomSelect({
 export default function TradingForm({ marketData, marketId, initialSide = "yes", balanceRefreshSignal = 0 }: Props) {
   const { showPending, showSuccess, showError } = useTxToast();
   const { isConnected, address: user } = useAccount();
- const chainId = useChainId();
+  const chainId = useChainId();
 
   const [action, setAction] = useState<TradeAction>("buy");
   const [side, setSide] = useState<TradeSide>(initialSide);
@@ -144,12 +160,12 @@ export default function TradingForm({ marketData, marketId, initialSide = "yes",
   const [collateralInput, setCollateralInput] = useState("");
   const [limitPriceInput, setLimitPriceInput] = useState("");
 
-  // MarketData tuple: [creator, market, collateral, conditionTokens, orderBook, matchingEngine, conditionId, startTime, endTime, resolved, fee]
   const marketAddr = marketData[1] as string;
   const collateralAddr = marketData[2] as string;
   const conditionId = marketData[6] as `0x${string}`;
   const isResolved = marketData[9] as boolean;
   const conditionalTokensAddr = marketData[3] as string;
+  const marketFeeRate = BigInt(marketData[10] ?? 0n);
 
   const { data: collateralDecimalsRaw } = useReadContract({
     address: collateralAddr as `0x${string}`,
@@ -159,38 +175,36 @@ export default function TradingForm({ marketData, marketId, initialSide = "yes",
   });
   const collateralDecimals = Number(collateralDecimalsRaw ?? 18);
 
-  const collateral = parseFloat(collateralInput) ||0;
-  const limitPrice = parseFloat(limitPriceInput) ||0;
+  const collateral = parseFloat(collateralInput) || 0;
+  const limitPrice = parseFloat(limitPriceInput) || 0;
   const collateralAmount = decimalToUnits(collateralInput, collateralDecimals);
   const limitPriceWei = decimalToWei(limitPriceInput);
-  // isYes 是 buy/sell 路径的核心决定参数,提前定义供多处使用
   const isYes = side === "yes";
 
-  // YES best bid / NO best ask are read from indexed active limit orders.
   const { data: graphOrders = [] } = useSubgraphMarketOrders(marketId);
   const liveBestBidBig = bestBid(graphOrders);
   const liveBestAskBig = bestAsk(graphOrders);
   const bestYesCollateralBuyBig = bestCollateralBuyPrice(graphOrders, "YES");
   const bestNoCollateralBuyBig = bestCollateralBuyPrice(graphOrders, "NO");
+  const bestYesShareSellBig = bestShareSellPrice(graphOrders, "YES");
+  const bestNoShareSellBig = bestShareSellPrice(graphOrders, "NO");
 
-  // 读取用户 YES/NO CTF 持仓，数量精度与 collateral decimals 一致
-  // CTF.balanceOf 自定义重载: (address holder, bytes32 conditionId, uint256 outcomeIndex)
   const OUTCOME_YES = 0;
   const OUTCOME_NO = 1;
   const { data: userYesBalance, refetch: refetchUserYesBalance } = useReadContract({
-   address: conditionalTokensAddr as `0x${string}`,
-   abi: CONDITIONAL_TOKENS_POSITION_ABI,
-   functionName: "balanceOf",
-   args: [user as `0x${string}`, conditionId, BigInt(OUTCOME_YES)],
-   query: { enabled: isConnected && !!user && !!conditionalTokensAddr && !!conditionId },
-   });
+    address: conditionalTokensAddr as `0x${string}`,
+    abi: CONDITIONAL_TOKENS_POSITION_ABI,
+    functionName: "balanceOf",
+    args: [user as `0x${string}`, conditionId, BigInt(OUTCOME_YES)],
+    query: { enabled: isConnected && !!user && !!conditionalTokensAddr && !!conditionId },
+  });
   const { data: userNoBalance, refetch: refetchUserNoBalance } = useReadContract({
-   address: conditionalTokensAddr as `0x${string}`,
-   abi: CONDITIONAL_TOKENS_POSITION_ABI,
-   functionName: "balanceOf",
-   args: [user as `0x${string}`, conditionId, BigInt(OUTCOME_NO)],
-   query: { enabled: isConnected && !!user && !!conditionalTokensAddr && !!conditionId },
-   });
+    address: conditionalTokensAddr as `0x${string}`,
+    abi: CONDITIONAL_TOKENS_POSITION_ABI,
+    functionName: "balanceOf",
+    args: [user as `0x${string}`, conditionId, BigInt(OUTCOME_NO)],
+    query: { enabled: isConnected && !!user && !!conditionalTokensAddr && !!conditionId },
+  });
   const userYesBig: bigint | undefined = userYesBalance as bigint | undefined;
   const userNoBig: bigint | undefined = userNoBalance as bigint | undefined;
   const userShareYes = userYesBig ? unitsToNumber(userYesBig, collateralDecimals) : 0;
@@ -204,88 +218,55 @@ export default function TradingForm({ marketData, marketId, initialSide = "yes",
     refetchUserNoBalance();
   }, [balanceRefreshSignal]);
 
-  // priceForCalc:
-  // - 市价单:用实时 bestPrice (buy YES→bestAsk, buy NO→bestBid, sell 对称)
-  // - 限价单:用用户输入的 limitPrice
-  const bestBidYesPrice = liveBestBidBig && liveBestBidBig >0n ? weiToNumber(liveBestBidBig) :0;
-  const bestAskNoPrice = liveBestAskBig && liveBestAskBig >0n ? weiToNumber(liveBestAskBig) :0;
-  const bestBidYesPercent = liveBestBidBig && liveBestBidBig >0n ? priceWeiToPercent(liveBestBidBig) : null;
-  const bestAskNoPercent = liveBestAskBig && liveBestAskBig >0n ? priceWeiToPercent(liveBestAskBig) : null;
-  const buyRefPrice = isYes ? bestAskNoPrice : bestBidYesPrice;
+  const bestBidYesPercent = liveBestBidBig && liveBestBidBig > 0n ? priceWeiToPercent(liveBestBidBig) : null;
+  const bestAskNoPercent = liveBestAskBig && liveBestAskBig > 0n ? priceWeiToPercent(liveBestAskBig) : null;
+  const buyRefPriceWei = isYes ? bestYesShareSellBig : bestNoShareSellBig;
+  const buyRefPrice = buyRefPriceWei && buyRefPriceWei > 0n ? weiToNumber(buyRefPriceWei) : 0;
   const sellCostPriceWei = calcMarketSellCostPrice(isYes, bestYesCollateralBuyBig, bestNoCollateralBuyBig);
-  const sellCostPrice = sellCostPriceWei >0n ? weiToNumber(sellCostPriceWei) :0;
+  const sellCostPrice = sellCostPriceWei > 0n ? weiToNumber(sellCostPriceWei) : 0;
   const refPrice = action === "sell" ? sellCostPrice : buyRefPrice;
-  const priceForCalc = orderMode === "market" && refPrice >0
-   ? refPrice
-   : (limitPrice >0 ? limitPrice : MOCK_PRICE_YES);
+  const priceForCalc = orderMode === "market" && refPrice > 0 ? refPrice : (limitPrice > 0 ? limitPrice : MOCK_PRICE_YES);
 
-  // 市价买入看可吃的对手卖单；市价卖出只能吃 collateral buy 单，不能把份额卖单算成流动性。
-  const noLiquidity = orderMode === "market" && action === "buy" && isConnected && buyRefPrice ===0;
+  const noLiquidity = orderMode === "market" && action === "buy" && isConnected && buyRefPrice === 0;
   const noSellLiquidity = orderMode === "market" && action === "sell" && isConnected && sellCostPriceWei === 0n;
 
   const sideColor = isYes ? "var(--yes)" : "var(--no)";
-  const sideBg = sideColor;
 
-  // amountWei: 合约 amount 语义 = CTF 份额数量，精度与 collateral decimals 一致
-  // - 限价/卖出: 用户输入 1 => 1 * 10 ** collateralDecimals
-  // - 市价买入: amount = collateralInput * 1e18 / price
   const amountWei = (() => {
-   if (collateralAmount <=0n) return 0n;
-   if (orderMode === "limit") return calcLimitShareAmount(collateralAmount);
-   if (action === "sell") return collateralAmount;
-   const calcPriceWei = isYes ? (liveBestAskBig ??0n) : (liveBestBidBig ??0n);
-   return calcBuyShareAmount(collateralAmount, calcPriceWei);
+    if (collateralAmount <= 0n) return 0n;
+    if (orderMode === "limit") return calcLimitShareAmount(collateralAmount);
+    if (action === "sell") return collateralAmount;
+    const calcPriceWei = buyRefPriceWei ?? 0n;
+    return calcBuyShareAmount(collateralAmount, calcPriceWei);
   })();
 
-  // expectedCtf (preview: 期望得到/挂出的 CTF 数量,按 collateral decimals 显示)
-  // - 限价: input 是份数
-  // - 市价买入: input 是 USDC,期望得到 = USDC / priceForCalc
-  const expectedCtf = orderMode === "limit" && amountWei >0n
-   ? unitsToNumber(amountWei, collateralDecimals)
-   : action === "buy" && collateral >0 && priceForCalc >0
-   ? collateral / priceForCalc
-   : 0;
+  const expectedCtf = orderMode === "limit" && amountWei > 0n
+    ? unitsToNumber(amountWei, collateralDecimals)
+    : action === "buy" && collateral > 0 && priceForCalc > 0
+    ? collateral / priceForCalc
+    : 0;
 
-  // 卖出收入预览: amount × 当前可吃到的买单价格
-  // 市价卖出只转出对应 CTF 份额,不需要额外支付 USDC 抵押物
-  const expectedReceive: bigint = action === "sell" && amountWei >0n && sellCostPrice >0
-   ? (amountWei * sellCostPriceWei) / (10n **18n)
+  const expectedReceive: bigint = action === "sell" && amountWei > 0n && sellCostPrice > 0
+    ? (amountWei * sellCostPriceWei) / (10n ** 18n)
     : 0n;
 
-  // priceWei (1e18精度,传给合约的 limitPrice 参数)
-  // 限价单: 用 limitPriceInput
-  // 市价单: 用实时 bestAsk/bestBid
   const priceWei = (() => {
-   if (orderMode === "limit") {
-   return limitPriceWei;
-   }
-   // 买: YES 吃 NO ask, NO 吃 YES bid; 卖: YES 反向吃 YES bid, NO 反向吃 NO ask
-   if (action === "sell") return sellCostPriceWei;
-   const ref = isYes ? liveBestAskBig : liveBestBidBig;
-   return ref && ref >0n ? ref :0n;
+    if (orderMode === "limit") return limitPriceWei;
+    if (action === "sell") return sellCostPriceWei;
+    const ref = isYes ? liveBestAskBig : liveBestBidBig;
+    return ref && ref > 0n ? ref : 0n;
   })();
-  const limitSellReceive: bigint = action === "sell" && orderMode === "limit" && amountWei >0n && priceWei >0n
-   ? (amountWei * priceWei) / (10n **18n)
-   : 0n;
+  const limitSellReceive: bigint = action === "sell" && orderMode === "limit" && amountWei > 0n && priceWei > 0n
+    ? (amountWei * priceWei) / (10n ** 18n)
+    : 0n;
 
-  // approveAmt 拆分: 抵押物金额按 ERC20 decimals, CTF shares/price 保持 1e18
- //   - 限价买入(placeOrder):prepay = price × amount / 1e18
- //   - 限价卖出(placeSellOrder):不锁 USDC,改为托管 CTF shares
-  //   - 市价买入(buyShares):合约按 maxCost / amount 推导执行限价
-  //   - 市价卖出(sellShares):只需要 CTF 授权,不需要 USDC allowance
-  const placeOrderCost: bigint = orderMode === "limit"
-   ? calcLimitOrderPrepay(action, priceWei, amountWei)
-   :0n;
- const limitOrderIsYes = calcLimitOrderBookSide(action, isYes);
-  const buyMaxCost: bigint = action === "buy" && orderMode === "market" && collateral >0
-  ? calcBufferedMaxCost(collateralAmount)
-   :0n;
- const approvalKind = calcTradeApprovalKind(action, orderMode);
- const marketPrepay: bigint = orderMode === "market" && approvalKind === "usdc" ? buyMaxCost :0n;
- // approve 金额:买入用 USDC; 卖出(市价/限价)走 CTF setApprovalForAll
- const approveAmt: bigint = approvalKind === "usdc" ? (orderMode === "limit" ? placeOrderCost : marketPrepay) :0n;
+  const placeOrderCost: bigint = orderMode === "limit" ? calcLimitOrderPrepay(action, priceWei, amountWei) : 0n;
+  const limitOrderIsYes = calcLimitOrderBookSide(action, isYes);
+  const buyMaxCost: bigint = action === "buy" && orderMode === "market" && collateral > 0 ? calcBufferedMaxCost(collateralAmount) : 0n;
+  const approvalKind = calcTradeApprovalKind(action, orderMode);
+  const marketPrepay: bigint = orderMode === "market" && approvalKind === "usdc" ? calcMarketBuyApproval(buyMaxCost, marketFeeRate) : 0n;
+  const approveAmt: bigint = approvalKind === "usdc" ? (orderMode === "limit" ? placeOrderCost : marketPrepay) : 0n;
 
-  // ── Approval check ──────────────────────────────────────────────────────────
   const { data: allowance, refetch: refetchAllowance } = useReadContract({
     address: collateralAddr as `0x${string}`,
     abi: ERC20_ABI,
@@ -293,9 +274,8 @@ export default function TradingForm({ marketData, marketId, initialSide = "yes",
     args: [user as `0x${string}`, marketAddr as `0x${string}`],
     query: { enabled: isConnected && !!user && !!marketAddr && approvalKind === "usdc" && approveAmt > 0n },
   });
-
- const currentAllowance: bigint = (allowance as bigint | undefined) ??0n;
- const needsUsdcApproval = isConnected && !!user && approveAmt >0n && currentAllowance < approveAmt;
+  const currentAllowance: bigint = (allowance as bigint | undefined) ?? 0n;
+  const needsUsdcApproval = isConnected && !!user && approveAmt > 0n && currentAllowance < approveAmt;
 
   const { data: shareTransferApproved, refetch: refetchShareApproval } = useReadContract({
     address: conditionalTokensAddr as `0x${string}`,
@@ -304,10 +284,9 @@ export default function TradingForm({ marketData, marketId, initialSide = "yes",
     args: [user as `0x${string}`, marketAddr as `0x${string}`],
     query: { enabled: isConnected && !!user && approvalKind === "shares" && !!conditionalTokensAddr && !!marketAddr },
   });
- const needsShareApproval = isConnected && !!user && approvalKind === "shares" && shareTransferApproved === false;
- const needsApproval = needsUsdcApproval || needsShareApproval;
+  const needsShareApproval = isConnected && !!user && approvalKind === "shares" && shareTransferApproved === false;
+  const needsApproval = needsUsdcApproval || needsShareApproval;
 
-  // ── Approval mutation ───────────────────────────────────────────────────────
   const { writeContract: writeApprove, data: approveTxHash, isPending: isApprovePending } = useWriteContract();
   const { isLoading: isApproving, isSuccess: approveSuccess } = useWaitForTransactionReceipt({ hash: approveTxHash });
 
@@ -316,16 +295,14 @@ export default function TradingForm({ marketData, marketId, initialSide = "yes",
     if (isApproving) showPending(approveTxHash, needsShareApproval ? "Approve Shares" : "Approve USDC");
   }, [approveTxHash, isApproving, needsShareApproval]);
 
- useEffect(() => {
- if (!approveTxHash || !approveSuccess) return;
- showSuccess("Approved", approveTxHash);
- refetchAllowance();
- refetchShareApproval();
- // 授权成功后自动触发下单
- handleOrder();
- }, [approveTxHash, approveSuccess]);
+  useEffect(() => {
+    if (!approveTxHash || !approveSuccess) return;
+    showSuccess("Approved", approveTxHash);
+    refetchAllowance();
+    refetchShareApproval();
+    handleOrder();
+  }, [approveTxHash, approveSuccess]);
 
-  // ── Order mutation ───────────────────────────────────────────────────────────
   const { writeContract: writeOrder, data: orderTxHash, isPending: isOrderPending } = useWriteContract();
   const { isLoading: isOrdering, isSuccess: orderSuccess, isError: orderError } = useWaitForTransactionReceipt({ hash: orderTxHash });
 
@@ -349,587 +326,461 @@ export default function TradingForm({ marketData, marketId, initialSide = "yes",
     showError("Order failed");
   }, [orderTxHash, orderError]);
 
- const handleApprove = () => {
- if (needsShareApproval) {
- console.log("[Approve] ConditionalTokens.setApprovalForAll args:", {
- operator: marketAddr,
- approved: true,
-  });
-  writeApprove({
-  address: conditionalTokensAddr as `0x${string}`,
-  abi: CONDITIONAL_TOKENS_OPERATOR_ABI,
-  functionName: "setApprovalForAll",
-  args: [marketAddr as `0x${string}`, true],
-  });
-  return;
- }
- console.log("[Approve] ERC20.approve args:", {
- spender: marketAddr,
- value: approveAmt.toString(),
- valueDecimal: unitsToNumber(approveAmt, collateralDecimals),
-  });
-  writeApprove({
-  address: collateralAddr as `0x${string}`,
- abi: ERC20_ABI,
- functionName: "approve",
- args: [marketAddr as `0x${string}`, approveAmt],
- });
- };
+  const handleApprove = () => {
+    if (needsShareApproval) {
+      console.log("[Approve] ConditionalTokens.setApprovalForAll args:", {
+        operator: marketAddr,
+        approved: true,
+      });
+      writeApprove({
+        address: conditionalTokensAddr as `0x${string}`,
+        abi: CONDITIONAL_TOKENS_OPERATOR_ABI,
+        functionName: "setApprovalForAll",
+        args: [marketAddr as `0x${string}`, true],
+      });
+      return;
+    }
+    console.log("[Approve] ERC20.approve args:", {
+      spender: marketAddr,
+      value: approveAmt.toString(),
+      valueDecimal: unitsToNumber(approveAmt, collateralDecimals),
+    });
+    writeApprove({
+      address: collateralAddr as `0x${string}`,
+      abi: ERC20_ABI,
+      functionName: "approve",
+      args: [marketAddr as `0x${string}`, approveAmt],
+    });
+  };
 
- // isYes = side === "yes" (determines which outcome position is bought/sold)
- //
- // 合约调用矩阵(全部 amount 是 CTF shares, 精度跟 collateral decimals 一致):
- //   buy + market → Market.buyShares(isYes, amount, maxCost, fillOrKill)  // 链上 view 预读 + 滑点保护
- //   buy + limit  → Market.placeOrder(isYes, price, amount) 锁 USDC 挂买单
- //   sell + limit → Market.placeSellOrder(isYes, price, amount) 托管 CTF 挂卖单
- //   sell + market → Market.sellShares(isYes, amount, minReceive)  // 撮合 + burn 配对 1:1 退 USDC
- //
- // 重要约束:
-  //   - placeOrder 只能锁 USDC 挂买单; placeSellOrder 才是已有份额限价卖出
-  //   - sellShares amount=collateral decimals, minReceive=collateral decimals
-  //   - buyShares amount=collateral decimals, maxCost=collateral decimals, fillOrKill 控制是否必须吃满
- //   - buyShares 内部走 fillOrders + 链上 OB.getFills 预读做滑点守门,比直接调 fillOrders 更安全
-
- // maxCostWei: 用户愿意为买 amount 份 CTF 出的最多抵押物(滑点保护, ERC20 decimals)
-// buyShares 内部会用 maxCost / amount 推导 per-share 限价,并在链上做预算保护。
-// 前端授权同样使用 maxCost,避免高于 0.5 的订单在 transferFrom 阶段失败。
- const maxCostWei: bigint = buyMaxCost;
- // fillOrKill: false = 允许部分成交(true 会更激进,但失败概率高,UX 不友好)
- const fillOrKill = false;
-
- // minReceive: 卖 N 份 isYes 时用户期望最少拿到的抵押物(滑点保护, ERC20 decimals)
-  // sellShares 收入 ≈ amount × 当前可成交买单价格
-  // 留 10% 滑点:minReceive = expectedReceive × 0.9
-  const minReceiveWei: bigint = action === "sell"
-  ? calcMarketSellMinReceive(amountWei, sellCostPriceWei)
-  :0n;
-
-// sell 校验: amount 不能超过用户当前持仓。限价卖出前端按对侧挂单表达，也必须符合卖出意图。
-const sellOverflow = action === "sell" && userShareBig !== undefined && amountWei > (userShareBig ?? 0n);
+  const maxCostWei: bigint = buyMaxCost;
+  const fillOrKill = false;
+  const minReceiveWei: bigint = action === "sell" ? calcMarketSellMinReceive(amountWei, sellCostPriceWei) : 0n;
+  const sellOverflow = action === "sell" && userShareBig !== undefined && amountWei > (userShareBig ?? 0n);
 
   const handleOrder = () => {
-  if (orderMode === "limit") {
-  const limitFunctionName = action === "sell" ? "placeSellOrder" : "placeOrder";
-  const limitArgs = action === "sell"
-   ? [isYes, priceWei, amountWei]
-   : [limitOrderIsYes, priceWei, amountWei];
-  // Maker: buy uses placeOrder (locks USDC), sell uses placeSellOrder (escrows CTF shares).
-  // 合约语义: price 是 1e18 价格, amount 是 collateral decimals 数量
-  console.log(`[${limitFunctionName}]`, {
-  chain: chainId,
-  contract: "Market",
-  address: marketAddr,
-  selector: `${limitFunctionName}(bool,uint128,uint128)`,
-  orderIntent: action,
-  arg0_isYes: action === "sell" ? isYes : limitOrderIsYes,
-  outcomeSide: isYes ? "YES" : "NO",
-  bookSide: limitOrderIsYes ? "YES" : "NO",
-  arg1_price: priceWei.toString(),
-  arg1_priceDecimal: Number(priceWei) /1e18,
-  arg2_amount: amountWei.toString(),
-  arg2_amountDecimal_CTF: unitsToNumber(amountWei, collateralDecimals),
-  // 限价买入预付 collateral = price * amount / 1e18; 限价卖出托管 shares
-  expectedCost: placeOrderCost.toString(),
-  expectedCostDecimal: unitsToNumber(placeOrderCost, collateralDecimals),
-  });
-  try {
-  writeOrder({
-  abi: ABIs.Market as any,
-  address: marketAddr as `0x${string}`,
-  functionName: limitFunctionName,
-  args: limitArgs,
-  });
-  } catch (err) {
-  console.error(`[${limitFunctionName} Error]`, err);
-  const msg = (err as any)?.shortMessage || (err as any)?.message || "Order failed";
-  showError(msg);
-  }
-  } else if (action === "sell") {
-  // Taker 市价卖出: Market.sellShares(bool isYes, uint128 amount, uint128 minReceive)
-  // amount = collateral decimals (用户想卖的份数), minReceive = collateral decimals
-  // 合约内部: 吃对应买单,把用户的 CTF 份额转给 maker,把 maker 锁定的 USDC 支付给用户
-  console.log("[sellShares]", {
-  chain: chainId,
-  contract: "Market",
-  address: marketAddr,
-  selector: "0x sellShares(bool,uint128,uint128)",
-  arg0_isYes: isYes,
-  arg1_amount: amountWei.toString(),
-  arg1_amountDecimal_CTF: unitsToNumber(amountWei, collateralDecimals),
-  arg2_minReceive: minReceiveWei.toString(),
-  arg2_minReceiveDecimal: unitsToNumber(minReceiveWei, collateralDecimals),
-  //前端预计收入(USDC) = amount × 当前可成交买单价格
-  expectedNetReceive: expectedReceive.toString ? expectedReceive.toString() : "0",
-  expectedNetReceiveDecimal: unitsToNumber(expectedReceive, collateralDecimals),
-  //用户当前持仓
-  userShareSide: userShareBig?.toString() ?? "0",
-  userShareSideDecimal: userShareBig ? unitsToNumber(userShareBig, collateralDecimals) :0,
-  //市价单参考价
-  refPrice_BestYesCollateralBuy: bestYesCollateralBuyBig?.toString() ?? "0",
-  refPrice_BestYesCollateralBuy_decimal: bestYesCollateralBuyBig ? Number(bestYesCollateralBuyBig) /1e18 :0,
-  refPrice_BestNoCollateralBuy: bestNoCollateralBuyBig?.toString() ?? "0",
-  refPrice_BestNoCollateralBuy_decimal: bestNoCollateralBuyBig ? Number(bestNoCollateralBuyBig) /1e18 :0,
-  });
-  try {
-  writeOrder({
-  abi: ABIs.Market as any,
-  address: marketAddr as `0x${string}`,
-  functionName: "sellShares",
-  args: [isYes, amountWei, minReceiveWei],
-  });
-  } catch (err) {
-  console.error("[sellShares Error]", err);
-  const msg = (err as any)?.shortMessage || (err as any)?.message || "Order failed";
-  showError(msg);
-  }
-  } else {
-  // Taker 市价买入: Market.buyShares(bool isYes, uint128 amount, uint128 maxCost, bool fillOrKill)
-  // amount = collateral decimals (想买的份数)
-  // maxCost = collateral decimals (滑点保护, 留 10% 缓冲)
-  // fillOrKill = false (允许部分成交)
-  // 合约内部:用 maxCost / amount 推导限价并做预算保护
-  // isYes=true → 买 YES 吃 NO 卖单(从 bestAsk 往上扫)
-  // isYes=false → 买 NO 吃 YES 买单(从 bestBid 往下扫)
-  console.log("[buyShares]", {
-  chain: chainId,
-  contract: "Market",
-  address: marketAddr,
-  selector: "0x buyShares(bool,uint128,uint128,bool)",
-  arg0_isYes: isYes,
-  arg1_amount: amountWei.toString(),
-  arg1_amountDecimal_CTF: unitsToNumber(amountWei, collateralDecimals),
-  arg2_maxCost: maxCostWei.toString(),
-  arg2_maxCostDecimal_USDC: unitsToNumber(maxCostWei, collateralDecimals),
-  arg3_fillOrKill: fillOrKill,
-  //前端预期撮合成本 = 用户输入的抵押物金额
-  expectedCost_userInput: (action === "buy" && orderMode === "market" && collateral >0)
-   ? collateralAmount.toString()
-   : "0",
-  expectedCost_userInputDecimal: unitsToNumber(collateralAmount, collateralDecimals),
-  //市价单参考价(来自链上)
-  refPrice_BestAsk_NO: liveBestAskBig?.toString() ?? "0",
-  refPrice_BestAsk_NO_decimal: liveBestAskBig ? Number(liveBestAskBig) /1e18 :0,
-  refPrice_BestBid_YES: liveBestBidBig?.toString() ?? "0",
-  refPrice_BestBid_YES_decimal: liveBestBidBig ? Number(liveBestBidBig) /1e18 :0,
-  });
-  try {
-  writeOrder({
-  abi: ABIs.Market as any,
-  address: marketAddr as `0x${string}`,
-  functionName: "buyShares",
-  args: [isYes, amountWei, maxCostWei, fillOrKill],
-  });
-  } catch (err) {
-  console.error("[buyShares Error]", err);
-  const msg = (err as any)?.shortMessage || (err as any)?.message || "Order failed";
-  showError(msg);
-  }
-  }
+    if (orderMode === "limit") {
+      const limitFunctionName = action === "sell" ? "placeSellOrder" : "placeOrder";
+      const limitArgs = action === "sell" ? [isYes, priceWei, amountWei] : [limitOrderIsYes, priceWei, amountWei];
+      console.log(`[${limitFunctionName}]`, {
+        chain: chainId,
+        contract: "Market",
+        address: marketAddr,
+        selector: `${limitFunctionName}(bool,uint128,uint128)`,
+        orderIntent: action,
+        arg0_isYes: action === "sell" ? isYes : limitOrderIsYes,
+        outcomeSide: isYes ? "YES" : "NO",
+        bookSide: limitOrderIsYes ? "YES" : "NO",
+        arg1_price: priceWei.toString(),
+        arg1_priceDecimal: Number(priceWei) / 1e18,
+        arg2_amount: amountWei.toString(),
+        arg2_amountDecimal_CTF: unitsToNumber(amountWei, collateralDecimals),
+        expectedCost: placeOrderCost.toString(),
+        expectedCostDecimal: unitsToNumber(placeOrderCost, collateralDecimals),
+      });
+      try {
+        writeOrder({
+          abi: ABIs.Market as any,
+          address: marketAddr as `0x${string}`,
+          functionName: limitFunctionName,
+          args: limitArgs,
+        });
+      } catch (err) {
+        console.error(`[${limitFunctionName} Error]`, err);
+        const msg = (err as any)?.shortMessage || (err as any)?.message || "Order failed";
+        showError(msg);
+      }
+    } else if (action === "sell") {
+      console.log("[sellShares]", {
+        chain: chainId,
+        contract: "Market",
+        address: marketAddr,
+        selector: "0x sellShares(bool,uint128,uint128)",
+        arg0_isYes: isYes,
+        arg1_amount: amountWei.toString(),
+        arg1_amountDecimal_CTF: unitsToNumber(amountWei, collateralDecimals),
+        arg2_minReceive: minReceiveWei.toString(),
+        arg2_minReceiveDecimal: unitsToNumber(minReceiveWei, collateralDecimals),
+        expectedNetReceive: expectedReceive.toString ? expectedReceive.toString() : "0",
+        expectedNetReceiveDecimal: unitsToNumber(expectedReceive, collateralDecimals),
+        userShareSide: userShareBig?.toString() ?? "0",
+        userShareSideDecimal: userShareBig ? unitsToNumber(userShareBig, collateralDecimals) : 0,
+        refPrice_BestYesCollateralBuy: bestYesCollateralBuyBig?.toString() ?? "0",
+        refPrice_BestYesCollateralBuy_decimal: bestYesCollateralBuyBig ? Number(bestYesCollateralBuyBig) / 1e18 : 0,
+        refPrice_BestNoCollateralBuy: bestNoCollateralBuyBig?.toString() ?? "0",
+        refPrice_BestNoCollateralBuy_decimal: bestNoCollateralBuyBig ? Number(bestNoCollateralBuyBig) / 1e18 : 0,
+      });
+      try {
+        writeOrder({
+          abi: ABIs.Market as any,
+          address: marketAddr as `0x${string}`,
+          functionName: "sellShares",
+          args: [isYes, amountWei, minReceiveWei],
+        });
+      } catch (err) {
+        console.error("[sellShares Error]", err);
+        const msg = (err as any)?.shortMessage || (err as any)?.message || "Order failed";
+        showError(msg);
+      }
+    } else {
+      console.log("[buyShares]", {
+        chain: chainId,
+        contract: "Market",
+        address: marketAddr,
+        selector: "0x buyShares(bool,uint128,uint128,bool)",
+        arg0_isYes: isYes,
+        arg1_amount: amountWei.toString(),
+        arg1_amountDecimal_CTF: unitsToNumber(amountWei, collateralDecimals),
+        arg2_maxCost: maxCostWei.toString(),
+        arg2_maxCostDecimal_USDC: unitsToNumber(maxCostWei, collateralDecimals),
+        arg3_fillOrKill: fillOrKill,
+        expectedCost_userInput: (action === "buy" && orderMode === "market" && collateral > 0) ? collateralAmount.toString() : "0",
+        expectedCost_userInputDecimal: unitsToNumber(collateralAmount, collateralDecimals),
+        refPrice_BestAsk_NO: liveBestAskBig?.toString() ?? "0",
+        refPrice_BestAsk_NO_decimal: liveBestAskBig ? Number(liveBestAskBig) / 1e18 : 0,
+        refPrice_BestBid_YES: liveBestBidBig?.toString() ?? "0",
+        refPrice_BestBid_YES_decimal: liveBestBidBig ? Number(liveBestBidBig) / 1e18 : 0,
+        refPrice_BestShareSell_YES: bestYesShareSellBig?.toString() ?? "0",
+        refPrice_BestShareSell_YES_decimal: bestYesShareSellBig ? Number(bestYesShareSellBig) / 1e18 : 0,
+        refPrice_BestShareSell_NO: bestNoShareSellBig?.toString() ?? "0",
+        refPrice_BestShareSell_NO_decimal: bestNoShareSellBig ? Number(bestNoShareSellBig) / 1e18 : 0,
+      });
+      try {
+        writeOrder({
+          abi: ABIs.Market as any,
+          address: marketAddr as `0x${string}`,
+          functionName: "buyShares",
+          args: [isYes, amountWei, maxCostWei, fillOrKill],
+        });
+      } catch (err) {
+        console.error("[buyShares Error]", err);
+        const msg = (err as any)?.shortMessage || (err as any)?.message || "Order failed";
+        showError(msg);
+      }
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
-  e.preventDefault();
-  if (!isConnected || isResolved) return;
+    e.preventDefault();
+    if (!isConnected || isResolved) return;
 
-  // 限价买入/市价单检查 USDC 预付; 限价卖出检查 CTF 托管授权。
-  if (orderMode === "limit" && amountWei <=0n) return;
-  if (action === "buy" && orderMode === "limit" && approveAmt <=0n) return;
-  if (action === "buy" && orderMode === "market" && approveAmt <=0n) return;
-  if (action === "sell" && orderMode === "market" && amountWei <=0n) return;
-  if (action === "sell" && sellOverflow) {
-   showError(`Insufficient ${side.toUpperCase()} shares. You have ${userShareSide.toFixed(4)}, trying to sell ${collateral.toFixed(4)}.`);
-   return;
-  }
-
-  if (action === "buy" && orderMode === "market" && noLiquidity) {
-    showError("No liquidity for this outcome");
-    return;
-  }
-  if (action === "sell" && orderMode === "market" && noSellLiquidity) {
-    showError(`No buy orders available for ${side.toUpperCase()} shares`);
-    return;
-  }
-
-  if (needsApproval) {
-   handleApprove();
-  } else {
-   handleOrder();
-  }
+    if (orderMode === "limit" && amountWei <= 0n) return;
+    if (action === "buy" && orderMode === "limit" && approveAmt <= 0n) return;
+    if (action === "buy" && orderMode === "market" && approveAmt <= 0n) return;
+    if (action === "sell" && orderMode === "market" && amountWei <= 0n) return;
+    if (action === "sell" && sellOverflow) {
+      showError(`Insufficient ${side.toUpperCase()} shares. You have ${userShareSide.toFixed(4)}, trying to sell ${collateral.toFixed(4)}.`);
+      return;
+    }
+    if (action === "buy" && orderMode === "market" && noLiquidity) {
+      showError("No liquidity for this outcome");
+      return;
+    }
+    if (action === "sell" && orderMode === "market" && noSellLiquidity) {
+      showError(`No buy orders available for ${side.toUpperCase()} shares`);
+      return;
+    }
+    if (needsApproval) {
+      handleApprove();
+    } else {
+      handleOrder();
+    }
   };
 
-  // Determine button state
   const isPending = isApprovePending || isApproving || isOrderPending || isOrdering;
-  const needsApprove = needsApproval;
- const showApprove = needsApprove;
+  const showApprove = needsApproval;
 
- const submitDisabled =
-  !isConnected
-  || (action === "buy" && collateral <=0)
-  || (action === "sell" && collateral <=0)
-  || (action === "buy" && orderMode === "market" && noLiquidity)
-  || (action === "sell" && orderMode === "market" && noSellLiquidity)
-  || (action === "sell" && sellOverflow)
-  || (action === "sell" && userShareBig !== undefined && userShareBig ===0n)
-  || isPending
-  || isResolved;
+  const submitDisabled =
+    !isConnected
+    || (action === "buy" && collateral <= 0)
+    || (action === "sell" && collateral <= 0)
+    || (action === "buy" && orderMode === "market" && noLiquidity)
+    || (action === "sell" && orderMode === "market" && noSellLiquidity)
+    || (action === "sell" && sellOverflow)
+    || (action === "sell" && userShareBig !== undefined && userShareBig === 0n)
+    || isPending
+    || isResolved;
 
- let buttonLabel = "";
- if (isPending) {
-   buttonLabel = isApproving ? "Approving..." : isOrdering ? "Confirming..." : showApprove ? "Approve & Order" : "Confirming...";
- } else if (isResolved) {
-   buttonLabel = "Market Resolved";
- } else if (!isConnected) {
-  buttonLabel = "Connect Wallet";
-  } else if (action === "sell" && userShareBig ===0n) {
-   buttonLabel = `No ${side.toUpperCase()} Shares`;
-   } else if (action === "buy" && orderMode === "market" && noLiquidity) {
+  let buttonLabel = "";
+  if (isPending) {
+    buttonLabel = isApproving ? "Approving..." : isOrdering ? "Confirming..." : showApprove ? "Approve & Order" : "Confirming...";
+  } else if (isResolved) {
+    buttonLabel = "Market Resolved";
+  } else if (!isConnected) {
+    buttonLabel = "Connect Wallet";
+  } else if (action === "sell" && userShareBig === 0n) {
+    buttonLabel = `No ${side.toUpperCase()} Shares`;
+  } else if (action === "buy" && orderMode === "market" && noLiquidity) {
     buttonLabel = "No Liquidity";
-    } else if (action === "sell" && orderMode === "market" && noSellLiquidity) {
+  } else if (action === "sell" && orderMode === "market" && noSellLiquidity) {
     buttonLabel = `No ${side.toUpperCase()} Buy Orders`;
-   } else if (showApprove) {
-   buttonLabel = needsShareApproval ? "Approve Shares" : "Approve USDC";
- } else if (orderMode === "limit") {
-  buttonLabel = `Place ${side.toUpperCase()} Limit`;
- } else {
-  buttonLabel = `${action === "buy" ? "Buy" : "Sell"} ${side.toUpperCase()}`;
- }
-
- const errMsg = "";
- const effectivePrice = action === "buy" ? priceForCalc : (1 - priceForCalc);
-
- const plPreview = (() => {
-  if (collateral <= 0) return null;
-  if (action === "buy") {
-   return isYes ? collateral / priceForCalc : 0;
+  } else if (showApprove) {
+    buttonLabel = needsShareApproval ? "Approve Shares" : "Approve USDC";
+  } else if (orderMode === "limit") {
+    buttonLabel = `Place ${side.toUpperCase()} Limit`;
   } else {
-   // 卖出:input 是份数, 净收入 ≈ amount × (1 - 对手价)
-   return unitsToNumber(expectedReceive, collateralDecimals);
+    buttonLabel = `${action === "buy" ? "Buy" : "Sell"} ${side.toUpperCase()}`;
   }
- })();
+
+  const effectivePrice = action === "buy" ? priceForCalc : (1 - priceForCalc);
+  const plPreview = (() => {
+    if (collateral <= 0) return null;
+    if (action === "buy") return isYes ? collateral / priceForCalc : 0;
+    return unitsToNumber(expectedReceive, collateralDecimals);
+  })();
 
   const yesNoOptions = [
- { value: "yes", label: "YES" },
- { value: "no", label: "NO" },
- ];
+    { value: "yes", label: "YES" },
+    { value: "no", label: "NO" },
+  ];
 
- const orderTypeOptions = [
- { value: "market", label: "Market Order" },
- { value: "limit", label: "Limit Order" },
- ];
+  const orderTypeOptions = [
+    { value: "market", label: "Market Order" },
+    { value: "limit", label: "Limit Order" },
+  ];
 
- return (
-    <>
-      <div className="card" style={{ overflow: "hidden", padding: 0 }}>
+  // Submit button style: buy=emerald, sell=rose, approve=warning
+  const submitClass = showApprove
+    ? "btn btn-warning btn-block btn-lg"
+    : action === "buy"
+    ? "btn btn-yes btn-block btn-lg"
+    : "btn btn-no btn-block btn-lg";
 
-        {/* Header: BEST PRICE —实时来自链上 */}
- <div style={{
- padding: "14px 18px 12px",
- borderBottom: "1px solid var(--border)",
- background: "var(--bg-elevated)",
- display: "flex", alignItems: "center", justifyContent: "center",
- }}>
- <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
- <div style={{ textAlign: "center" }}>
- <div style={{ fontSize:22, fontWeight:800, color: "var(--yes)", fontFamily: "'JetBrains Mono', monospace", lineHeight:1.1 }}>
- {bestBidYesPercent !== null ? formatProbabilityPercent(bestBidYesPercent) : "—"}
- </div>
- <div style={{ fontSize:9, fontWeight:600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>YES bid</div>
- </div>
- <div style={{ width:1, height:28, background: "var(--border)" }} />
- <div style={{ textAlign: "center" }}>
- <div style={{ fontSize:22, fontWeight:800, color: "var(--no)", fontFamily: "'JetBrains Mono', monospace", lineHeight:1.1 }}>
- {bestAskNoPercent !== null ? formatProbabilityPercent(bestAskNoPercent) : "—"}
- </div>
- <div style={{ fontSize:9, fontWeight:600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>NO</div>
- </div>
- </div>
- </div>
+  return (
+    <div className="card trade-card">
+      {/* BEST PRICE HEADER */}
+      <div className="trade-card-head">
+        <div className="trade-card-best">
+          <div>
+            <div className="price yes">
+              {bestBidYesPercent !== null ? formatProbabilityPercent(bestBidYesPercent) : "—"}
+            </div>
+            <div className="label">YES bid</div>
+          </div>
+          <div className="divider" aria-hidden="true" />
+          <div>
+            <div className="price no">
+              {bestAskNoPercent !== null ? formatProbabilityPercent(bestAskNoPercent) : "—"}
+            </div>
+            <div className="label">NO ask</div>
+          </div>
+        </div>
+      </div>
 
-        {/* BUY / SELL toggle */}
-        <div style={{
-          display: "grid", gridTemplateColumns: "1fr 1fr",
-          borderBottom: "1px solid var(--border)",
-        }}>
-          {(["buy", "sell"] as TradeAction[]).map(a => (
-            <button
-              key={a}
-              type="button"
-              onClick={() => setAction(a)}
-              style={{
-                padding: "11px 0",
-                fontSize: 13, fontWeight: 700,
-                border: "none",
-                borderBottom: action === a ? `2.5px solid ${a === "buy" ? "var(--yes)" : "var(--no)"}` : "2.5px solid transparent",
-                background: "transparent",
-                color: action === a ? (a === "buy" ? "var(--yes)" : "var(--no)") : "var(--text-tertiary)",
-                cursor: "pointer",
-                transition: "all 150ms",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                fontFamily: "inherit",
-              }}
-            >
-              {a === "buy" ? "Buy" : "Sell"}
-            </button>
-          ))}
+      {/* BUY / SELL */}
+      <div className="trade-card-segment" role="tablist" aria-label="Trade action">
+        {(["buy", "sell"] as TradeAction[]).map((a) => (
+          <button
+            key={a}
+            type="button"
+            role="tab"
+            aria-selected={action === a}
+            onClick={() => setAction(a)}
+            className={action === a ? `active ${a}` : ""}
+          >
+            {a === "buy" ? "Buy" : "Sell"}
+          </button>
+        ))}
+      </div>
+
+      <form onSubmit={handleSubmit} className="trade-card-body">
+        {/* OUTCOME */}
+        <div className="trade-field">
+          <label>Outcome</label>
+          <CustomSelect
+            value={side}
+            options={yesNoOptions}
+            onChange={(v) => setSide(v as TradeSide)}
+            disabled={isResolved}
+            accentColor={sideColor}
+          />
         </div>
 
-        {/* Body */}
-        <form onSubmit={handleSubmit} style={{ padding: "16px", display: "flex", flexDirection: "column", gap: 12 }}>
-
-          {/* YES / NO selector */}
-          <div>
-            <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 5 }}>
-              Outcome
-            </label>
-            <CustomSelect
-              value={side}
-              options={yesNoOptions}
-              onChange={v => setSide(v as TradeSide)}
-              disabled={isResolved}
-              accentColor={sideColor}
-            />
-          </div>
-
-          {/* User Balance Display —实时显示用户 YES/NO 持仓 */}
-          <div style={{
-           display: "flex", justifyContent: "space-between", alignItems: "center",
-           padding: "8px 12px", borderRadius: 10,
-           background: "var(--bg-elevated)", border: "1px solid var(--border)",
-           fontSize: 12,
-          }}>
-           <span style={{ color: "var(--text-tertiary)", fontWeight: 600, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>Your Balance</span>
-           <div style={{ display: "flex", gap: 12, fontFamily: "'JetBrains Mono', monospace" }}>
-            <span style={{ color: "var(--yes)", fontWeight: 700 }}>
-             {userShareYes >0 ? userShareYes.toFixed(4) : "0"} <span style={{ fontSize: 10, color: "var(--text-tertiary)" }}>YES</span>
+        {/* BALANCE STRIP */}
+        <div className="balance-strip">
+          <span className="label">Your Balance</span>
+          <div className="balances">
+            <span className="yes">
+              {userShareYes > 0 ? userShareYes.toFixed(4) : "0"}
+              <span className="unit">YES</span>
             </span>
-            <span style={{ color: "var(--no)", fontWeight: 700 }}>
-             {userShareNo >0 ? userShareNo.toFixed(4) : "0"} <span style={{ fontSize: 10, color: "var(--text-tertiary)" }}>NO</span>
+            <span className="no">
+              {userShareNo > 0 ? userShareNo.toFixed(4) : "0"}
+              <span className="unit">NO</span>
             </span>
-           </div>
           </div>
+        </div>
 
-          {/* Order type */}
-          <div>
-            <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 5 }}>
-              Order Type
-            </label>
-            <CustomSelect
-              value={orderMode}
-              options={orderTypeOptions}
-              onChange={v => setOrderMode(v as "market" | "limit")}
+        {/* ORDER TYPE */}
+        <div className="trade-field">
+          <label>Order Type</label>
+          <CustomSelect
+            value={orderMode}
+            options={orderTypeOptions}
+            onChange={(v) => setOrderMode(v as "market" | "limit")}
+            disabled={isResolved}
+          />
+        </div>
+
+        {/* AMOUNT */}
+        <div className="trade-field">
+          <label>
+            {orderMode === "limit"
+              ? `Shares to place (${side.toUpperCase()})`
+              : action === "buy"
+              ? "You pay"
+              : `Shares to sell (${side.toUpperCase()})`}
+            {action === "sell" && userShareBig !== undefined && (
+              <span className="avail">· avail {userShareSide.toFixed(4)}</span>
+            )}
+          </label>
+          <div className="input-affix">
+            <input
+              type="number"
+              step={orderMode === "limit" || action === "sell" ? "0.0001" : "0.01"}
+              min="0"
+              value={collateralInput}
+              onChange={(e) => setCollateralInput(e.target.value)}
+              placeholder={orderMode === "limit" || action === "sell" ? "0" : "0.00"}
               disabled={isResolved}
+              className="input input-mono input-mono-large"
             />
-          </div>
-
-          {/* Amount — 买入为 USDC,卖出为份额数 */}
-          <div>
-            <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 5 }}>
-              {orderMode === "limit"
-               ? `Shares to place (${side.toUpperCase()})`
-               : action === "buy"
-               ? `You pay (USDC)`
-               : `Shares to sell (${side.toUpperCase()})`}
-              {action === "sell" && userShareBig !== undefined && (
-               <span style={{ color: "var(--text-tertiary)", fontWeight: 500, marginLeft: 6 }}>
-                · avail {userShareSide.toFixed(4)}
-               </span>
-              )}
-            </label>
-            <div style={{ position: "relative" }}>
-              <input
-                type="number" step={orderMode === "limit" || action === "sell" ? "0.0001" : "0.01"} min="0"
-                value={collateralInput}
-                onChange={e => setCollateralInput(e.target.value)}
-                placeholder={orderMode === "limit" || action === "sell" ? "0" : "0.00"}
-                disabled={isResolved}
-                className="input"
-                style={{ fontSize: 16, fontWeight: 600, padding: "10px 52px 10px 14px", textAlign: "right" }}
-              />
-              <span style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: "var(--text-tertiary)", fontWeight: 500 }}>
-               {orderMode === "limit" || action === "sell" ? `${side.toUpperCase()}` : "USDC"}
-              </span>
-            </div>
-            {action === "sell" && userShareBig !== undefined && userShareBig >0n && collateral >0 && (
-             <button type="button" onClick={() => setCollateralInput(String(userShareSide))}
-              style={{ marginTop: 4, fontSize: 11, fontWeight: 600, color: "var(--primary)", background: "transparent", border: "none", cursor: "pointer", padding: 0 }}>
-              Max
-             </button>
+            {action === "sell" && userShareBig !== undefined && userShareBig > 0n && collateral > 0 ? (
+              <button
+                type="button"
+                className="max-link"
+                onClick={() => setCollateralInput(String(userShareSide))}
+              >
+                MAX
+              </button>
+            ) : (
+              <span className="affix">{orderMode === "limit" || action === "sell" ? side.toUpperCase() : "USDC"}</span>
             )}
           </div>
+        </div>
 
-          {/* Limit price */}
-          {orderMode === "limit" && (
-            <div>
-              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 5 }}>
-                Limit Price
-              </label>
-              <div style={{ position: "relative" }}>
-                <input
-                  type="number"
-                  value={limitPriceInput}
-                  onChange={e => setLimitPriceInput(e.target.value)}
-                  placeholder="0.50"
-                  disabled={isResolved}
-                  className="input"
-                  style={{ fontSize: 16, fontWeight: 600, padding: "10px 52px 10px 14px", textAlign: "right" }}
-                />
-                <span style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: "var(--text-tertiary)", fontWeight: 500 }}>USDC</span>
-              </div>
-              <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
-                {[0.25, 0.4, 0.5].map(p => (
-                  <button
-                    key={p} type="button"
-                    onClick={() => setLimitPriceInput(String(p))}
-                    style={{
-                      flex: 1, padding: "5px 0", borderRadius: 8, fontSize: 11, fontWeight: 600,
-                      background: "var(--bg-elevated)", border: "1px solid var(--border)",
-                      color: "var(--text-secondary)", cursor: "pointer", fontFamily: "inherit",
-                    }}
-                  >
-                    {p * 100}%
-                  </button>
-                ))}
-              </div>
+        {/* LIMIT PRICE */}
+        {orderMode === "limit" && (
+          <div className="trade-field">
+            <label>Limit Price</label>
+            <div className="input-affix">
+              <input
+                type="number"
+                value={limitPriceInput}
+                onChange={(e) => setLimitPriceInput(e.target.value)}
+                placeholder="0.50"
+                disabled={isResolved}
+                className="input input-mono input-mono-large"
+              />
+              <span className="affix">USDC</span>
             </div>
-          )}
-
-          {/* Preview */}
-          <div style={{
-           background: "var(--bg-elevated)", borderRadius: 12, padding: "12px 14px",
-           display: "flex", flexDirection: "column", gap: 8, border: "1px solid var(--border)",
-          }}>
-           {orderMode === "limit" ? (
-            <>
-             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>You place</span>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 14, color: sideColor }}>
-               {amountWei >0n ? `${unitsToNumber(amountWei, collateralDecimals).toFixed(4)} ${side.toUpperCase()}` : `— ${side.toUpperCase()}`}
-              </span>
-             </div>
-             <div style={{ height: 1, background: "var(--border)" }} />
-             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{action === "sell" ? "Receive if filled" : "Locked collateral"}</span>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 14, color: "var(--text-primary)" }}>
-               {action === "sell"
-                ? (limitSellReceive >0n ? `${unitsToNumber(limitSellReceive, collateralDecimals).toFixed(4)} USDC` : "— USDC")
-                : (placeOrderCost >0n ? `${unitsToNumber(placeOrderCost, collateralDecimals).toFixed(4)} USDC` : "— USDC")}
-              </span>
-             </div>
-            </>
-           ) : action === "buy" ? (
-            <>
-             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>You pay</span>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 14, color: "var(--text-primary)" }}>
-               {collateral > 0 ? `${collateral.toFixed(4)} USDC` : "— USDC"}
-              </span>
-             </div>
-             <div style={{ height: 1, background: "var(--border)" }} />
-             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>You receive</span>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 14, color: sideColor }}>
-               {expectedCtf >0 ? `${expectedCtf.toFixed(4)} ${side.toUpperCase()}` : `— ${side.toUpperCase()}`}
-              </span>
-             </div>
-            </>
-           ) : (
-            <>
-             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>You sell</span>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 14, color: sideColor }}>
-               {amountWei >0n ? `${unitsToNumber(amountWei, collateralDecimals).toFixed(4)} ${side.toUpperCase()}` : `— ${side.toUpperCase()}`}
-              </span>
-             </div>
-             <div style={{ height: 1, background: "var(--border)" }} />
-             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>You receive ≈</span>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 14, color: "var(--text-primary)" }}>
-               {expectedReceive >0n ? `${unitsToNumber(expectedReceive, collateralDecimals).toFixed(4)} USDC` : "— USDC"}
-              </span>
-             </div>
-             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 11, color: "var(--text-tertiary)" }}>Min receive (slippage 10%)</span>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, fontSize: 12, color: "var(--text-tertiary)" }}>
-               {minReceiveWei >0n ? `${unitsToNumber(minReceiveWei, collateralDecimals).toFixed(4)} USDC` : "— USDC"}
-              </span>
-             </div>
-            </>
-           )}
-           {orderMode === "limit" && limitPrice > 0 && action === "buy" && (
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-             <span style={{ fontSize: 11, color: "var(--text-tertiary)" }}>Effective price</span>
-             <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, fontSize: 12, color: "var(--text-tertiary)" }}>
-              ${effectivePrice.toFixed(4)}
-             </span>
+            <div className="quick-pick" role="group" aria-label="Quick price picks">
+              {[0.25, 0.4, 0.5].map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setLimitPriceInput(String(p))}
+                  className={Number(limitPriceInput) === p ? "active" : ""}
+                >
+                  {Math.round(p * 100)}¢
+                </button>
+              ))}
             </div>
-           )}
-           {orderMode !== "limit" && collateral > 0 && plPreview !== null && (
-            <div style={{
-             background: isYes ? "var(--yes-light)" : "var(--no-light)",
-             borderRadius: 8, padding: "6px 10px",
-             display: "flex", justifyContent: "space-between", alignItems: "center",
-            }}>
-             <span style={{ fontSize: 11, fontWeight: 600, color: sideColor }}>
-              {action === "buy" ? "If YES wins" : "Net receive"}
-             </span>
-             <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 12, color: sideColor }}>
-              {plPreview >= 0 ? `+${plPreview.toFixed(4)}` : `${plPreview.toFixed(4)}`} USDC
-             </span>
-            </div>
-           )}
-          {action === "sell" && sellOverflow && (
-            <div style={{
-             background: "rgba(220,38,38,0.08)",
-             borderRadius: 8, padding: "6px 10px",
-             fontSize: 11, fontWeight: 600, color: "var(--no)",
-            }}>
-             Insufficient shares — try ≤ {userShareSide.toFixed(4)}
-            </div>
-           )}
-           {showApprove && collateral > 0 && (
-            <div style={{
-             background: "rgba(251,191,36,0.08)",
-             borderRadius: 8, padding: "6px 10px",
-             fontSize: 11, fontWeight: 600, color: "#fbbf24",
-            }}>
-             Approval required before placing order
-            </div>
-           )}
           </div>
+        )}
 
-          {/* Error */}
-          {errMsg && (
-            <div style={{
-              fontSize: 11, color: "var(--no)", background: "var(--no-light)",
-              border: "1px solid var(--no-border)", borderRadius: 8, padding: "8px 10px",
-            }}>
-              {errMsg}
+        {/* PREVIEW */}
+        <div className="trade-preview">
+          {orderMode === "limit" ? (
+            <>
+              <div className="trade-preview-row">
+                <span className="k">You place</span>
+                <span className={`v ${isYes ? "yes" : "no"}`}>
+                  {amountWei > 0n ? `${unitsToNumber(amountWei, collateralDecimals).toFixed(4)} ${side.toUpperCase()}` : `— ${side.toUpperCase()}`}
+                </span>
+              </div>
+              <div className="trade-preview-sep" aria-hidden="true" />
+              <div className="trade-preview-row">
+                <span className="k">{action === "sell" ? "Receive if filled" : "Locked collateral"}</span>
+                <span className="v">
+                  {action === "sell"
+                    ? (limitSellReceive > 0n ? `${unitsToNumber(limitSellReceive, collateralDecimals).toFixed(4)} USDC` : "— USDC")
+                    : (placeOrderCost > 0n ? `${unitsToNumber(placeOrderCost, collateralDecimals).toFixed(4)} USDC` : "— USDC")}
+                </span>
+              </div>
+            </>
+          ) : action === "buy" ? (
+            <>
+              <div className="trade-preview-row">
+                <span className="k">You pay</span>
+                <span className="v">{collateral > 0 ? `${collateral.toFixed(4)} USDC` : "— USDC"}</span>
+              </div>
+              <div className="trade-preview-sep" aria-hidden="true" />
+              <div className="trade-preview-row">
+                <span className="k">You receive</span>
+                <span className={`v ${isYes ? "yes" : "no"}`}>
+                  {expectedCtf > 0 ? `${expectedCtf.toFixed(4)} ${side.toUpperCase()}` : `— ${side.toUpperCase()}`}
+                </span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="trade-preview-row">
+                <span className="k">You sell</span>
+                <span className={`v ${isYes ? "yes" : "no"}`}>
+                  {amountWei > 0n ? `${unitsToNumber(amountWei, collateralDecimals).toFixed(4)} ${side.toUpperCase()}` : `— ${side.toUpperCase()}`}
+                </span>
+              </div>
+              <div className="trade-preview-sep" aria-hidden="true" />
+              <div className="trade-preview-row">
+                <span className="k">You receive ≈</span>
+                <span className="v">
+                  {expectedReceive > 0n ? `${unitsToNumber(expectedReceive, collateralDecimals).toFixed(4)} USDC` : "— USDC"}
+                </span>
+              </div>
+              <div className="trade-preview-row">
+                <span className="muted" style={{ color: "var(--text-tertiary)", fontSize: 11 }}>Min receive (10% slippage)</span>
+                <span className="v muted">
+                  {minReceiveWei > 0n ? `${unitsToNumber(minReceiveWei, collateralDecimals).toFixed(4)} USDC` : "— USDC"}
+                </span>
+              </div>
+            </>
+          )}
+
+          {orderMode === "limit" && limitPrice > 0 && action === "buy" && (
+            <div className="trade-preview-row">
+              <span className="muted" style={{ color: "var(--text-tertiary)", fontSize: 11 }}>Effective price</span>
+              <span className="v muted">${effectivePrice.toFixed(4)}</span>
             </div>
           )}
 
-          {/* Submit */}
-          <button
-            type="submit"
-            disabled={submitDisabled}
-            style={{
-              width: "100%", padding: "13px 0", borderRadius: 12, fontWeight: 700, fontSize: 14,
-              border: "none", cursor: submitDisabled ? "not-allowed" : "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-              transition: "all 150ms",
-              background: isPending ? "var(--text-tertiary)" : needsApprove ? "#fbbf24" : sideBg,
-              color: isPending ? "white" : needsApprove ? "#000" : "white",
-              opacity: submitDisabled ? 0.45 : 1,
-              boxShadow: submitDisabled ? "none" : `0 3px 12px ${needsApprove ? "rgba(251,191,36,0.3)" : isYes ? "rgba(26,127,90,0.3)" : "rgba(201,98,111,0.3)"}`,
-              fontFamily: "inherit",
-            }}
-          >
-            {isPending ? (
-              <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> {buttonLabel}</>
-            ) : buttonLabel}
-          </button>
-        </form>
-      </div>
-    </>
+          {orderMode !== "limit" && collateral > 0 && plPreview !== null && (
+            <div className={`pl-row ${isYes ? "yes" : "no"}`}>
+              <span>{action === "buy" ? "If YES wins" : "Net receive"}</span>
+              <span className="v">
+                {plPreview >= 0 ? `+${plPreview.toFixed(4)}` : plPreview.toFixed(4)} USDC
+              </span>
+            </div>
+          )}
+
+          {action === "sell" && sellOverflow && (
+            <div className="alert alert-no">Insufficient shares — try ≤ {userShareSide.toFixed(4)}</div>
+          )}
+          {showApprove && collateral > 0 && (
+            <div className="alert alert-warn">Approval required before placing order</div>
+          )}
+        </div>
+
+        {/* SUBMIT */}
+        <button
+          type="submit"
+          disabled={submitDisabled}
+          className={submitClass}
+        >
+          {isPending ? <Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} aria-hidden="true" /> : null}
+          {buttonLabel}
+        </button>
+      </form>
+    </div>
   );
 }

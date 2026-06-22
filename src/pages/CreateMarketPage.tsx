@@ -10,7 +10,6 @@ import { useTxToast } from "../components/TxToastContext";
 function defaultStartTime() {
   return toLocalDateTimeInput(new Date(Date.now() + 3600_000));
 }
-
 function defaultEndTime() {
   return toLocalDateTimeInput(new Date(Date.now() + 7 * 86400_000));
 }
@@ -141,20 +140,20 @@ export default function CreateMarketPage() {
   };
 
   return (
-    <div className="create-page">
-      <div className="create-page-header">
+    <div className="page-container create-page">
+      <div className="page-header">
         <div>
-          <h1>Create</h1>
-          <p>Launch a YES / NO prediction market.</p>
+          <h1>Create Market</h1>
+          <p>Launch a YES / NO prediction market on a verifiable future event.</p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="create-page-grid">
         <div className="create-page-main">
           <CreateSection
-            icon={<FileText size={16} />}
+            icon={<FileText size={16} strokeWidth={2.2} />}
             title="Question"
-            hint="A precise event that can resolve to YES or NO."
+            hint="A precise event that resolves to YES or NO."
           >
             <textarea
               value={question}
@@ -170,7 +169,7 @@ export default function CreateMarketPage() {
           </CreateSection>
 
           <CreateSection
-            icon={<Database size={16} />}
+            icon={<Database size={16} strokeWidth={2.2} />}
             title="Data Source"
             hint="The oracle, feed, or public source used for settlement."
           >
@@ -184,9 +183,9 @@ export default function CreateMarketPage() {
           </CreateSection>
 
           <CreateSection
-            icon={<CalendarClock size={16} />}
+            icon={<CalendarClock size={16} strokeWidth={2.2} />}
             title="Schedule"
-            hint="Set the trading window and fee."
+            hint="Set the trading window and protocol fee."
           >
             <div className="create-form-two-col">
               <label>
@@ -223,7 +222,7 @@ export default function CreateMarketPage() {
             <div className="create-form-terms-grid">
               <label>
                 <span>Collateral Token</span>
-                <input value={collateral} onChange={(event) => setCollateral(event.target.value)} className="input mono-input" />
+                <input value={collateral} onChange={(event) => setCollateral(event.target.value)} className="input input-mono mono-input" />
               </label>
               <label>
                 <span>Fee (%)</span>
@@ -240,41 +239,48 @@ export default function CreateMarketPage() {
           )}
 
           <div className="create-page-actions">
-            <button
-              type="submit"
-              disabled={cannotCreate}
-              className="btn-primary"
-            >
+            <button type="submit" disabled={cannotCreate} className="btn btn-primary">
               {isWorking ? (
-                <><Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} /> {isConfirming ? "Confirming..." : "Signing..."}</>
-              ) : !isConnected ? "Connect Wallet" : isOwnerLoading ? "Checking Owner..." : isOwnerError ? "Owner Check Failed" : ownerAddress && !isCreatorWallet ? "Owner Wallet Required" : "Create"}
+                <Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} aria-hidden="true" />
+              ) : null}
+              {isWorking
+                ? (isConfirming ? "Confirming..." : "Signing...")
+                : !isConnected
+                ? "Connect Wallet"
+                : isOwnerLoading
+                ? "Checking Owner..."
+                : isOwnerError
+                ? "Owner Check Failed"
+                : ownerAddress && !isCreatorWallet
+                ? "Owner Wallet Required"
+                : "Create Market"}
             </button>
           </div>
         </div>
 
         <aside className="create-preview-panel">
-          <div className="create-preview-title">
-            <span><ShieldCheck size={16} /></span>
+          <div className="create-preview-head">
+            <span className="icon"><ShieldCheck size={16} strokeWidth={2.2} aria-hidden="true" /></span>
             <div>
               <strong>Preview</strong>
-              <p>Shown before trading</p>
+              <p>How the market appears in the list</p>
             </div>
           </div>
 
           <div className="create-preview-card">
             <div className="create-preview-top">
-              <span>NEW</span>
-              <b>Active</b>
+              <span className="tag">NEW</span>
+              <span className="state">Active</span>
             </div>
             <h2>{trimmedQuestion || "Your market question will appear here"}</h2>
             <p>{trimmedDataSource || "Add a data source so traders understand how this market resolves."}</p>
-            <div className="create-preview-bars"><span /><span /></div>
-            <div className="create-preview-outcomes"><span>YES</span><span>NO</span></div>
+            <div className="create-preview-bars" aria-hidden="true"><span /><span /></div>
+            <div className="create-preview-outcomes"><span className="y">YES</span><span className="n">NO</span></div>
           </div>
 
           <div className="create-preview-stats">
-            <PreviewStat label="Duration" value={durationDays ? `${durationDays}d` : "Check"} />
-            <PreviewStat label="Fee" value={`${Number.isFinite(feePercent) ? feePercent : 0}%`} />
+            <div className="create-preview-stat"><span>Duration</span><strong>{durationDays ? `${durationDays}d` : "Check"}</strong></div>
+            <div className="create-preview-stat"><span>Fee</span><strong>{Number.isFinite(feePercent) ? feePercent : 0}%</strong></div>
           </div>
 
           {conditionId && (
@@ -292,8 +298,8 @@ export default function CreateMarketPage() {
 function CreateSection({ icon, title, hint, children }: { icon: React.ReactNode; title: string; hint: string; children: React.ReactNode }) {
   return (
     <section className="create-section">
-      <div className="create-section-heading">
-        <span>{icon}</span>
+      <div className="create-section-head">
+        <span className="icon">{icon}</span>
         <div>
           <strong>{title}</strong>
           <p>{hint}</p>
@@ -301,15 +307,6 @@ function CreateSection({ icon, title, hint, children }: { icon: React.ReactNode;
       </div>
       {children}
     </section>
-  );
-}
-
-function PreviewStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="create-preview-stat">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
   );
 }
 

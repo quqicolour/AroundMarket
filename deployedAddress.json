@@ -2,25 +2,29 @@
   "network": "arc_testnet",
   "chainId": 5042002,
   "deployer": "0x93561385F0192956036537804fc4E90307cE38F7",
-  "timestamp": "2026-06-18T06:25:46.501Z",
+  "timestamp": "2026-06-22T09:05:31.680Z",
   "core": {
-    "collateral": "0x2375504de874C2262776F640389bF31437627260",
-    "conditionalTokens": "0xCA483FbA80931C18CdE752c35d547c7e5BF57d6b",
-    "orderBookImpl": "0x9Bc25Bfd427E541743440dC418A0995028b84076",
-    "matchingEngineImpl": "0xc9022B63b0E3e9e137e8500F7cD0fC29B1bfD976",
-    "marketImpl": "0x0FFd6268E341AddA517CC987Ee3abD3356FAc012",
-    "settlementManager": "0xBF53f4405399f2ae04Bafd4c40780BAf6E405Cb0"
+    "collateral": "0x9f44808f66EDD95542D8a4dF6E355E5D218cFc61",
+    "conditionalTokens": "0xeCda894e6d7965ca18A14D9b896682326696c779",
+    "orderBookImpl": "0x9e54886B19E1b6113c9905C567cB4e3778482086",
+    "matchingEngineImpl": "0xD5Fe31A61bCABA8F8801A86912266Df2E87E34F0",
+    "marketImpl": "0xDd5e1a894f6d77C10D4cC0ee9eb344A4F2cd7B1c",
+    "settlementManager": "0x717D1F2548719A2a1da6b78f2F613c49E2B82260"
   },
-  "factory": "0x532C9455d213802b30ea0d53A55B730315A62dBc",
+  "factory": "0x5c1D5eFF4f320eAD937C5F5b6D08E827f011BD82",
   "feeRecipient": "0x93561385F0192956036537804fc4E90307cE38F7",
   "exampleMarket": {
     "marketId": 1,
-    "market": "0x7d7F7A7Edb5790aDDdcdf8DaDFcC57e765554E43",
-    "questionId": "0x1f19f3c282cb94aa59a3de8199537e9dd6677c9dde289075920a8424967cd3e7",
+    "market": "0xF16e037Db9AF9c8D62c9e3872000b626C11Cb3cA",
+    "questionId": "0x6df784ad0f37785e0d9b82bf33bd6eea1088a6a164237e93e3cd7601a15ebcd5",
     "question": "Will ETH close above 5000 USD by the end of 2026?",
     "dataSource": "Chainlink ETH/USD and configured oracle",
-    "startTime": 1781763998,
-    "endTime": 1782368798,
-    "txHash": "0xa6ebb5e50d2389c79bcc1ce919810c9be8f1b51d2a14476013d71730bcdad487"
+    "startTime": 1782119187,
+    "endTime": 1782723987,
+    "txHash": "0xab56cdfb73fc2ecefc38637f8c145ae951aa648fd88fb0cb8d37ef6d0d4f011c"
+  },
+  "authorizations": {
+    "ctFactoryAuthorization": true,
+    "ctSettlementManagerAuthorization": true
   }
 }

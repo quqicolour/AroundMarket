@@ -6,9 +6,11 @@ import {
   calcLimitOrderPrepay,
   calcLimitOrderBookSide,
   calcLimitShareAmount,
+  calcMarketBuyApproval,
   calcMarketPrepay,
   calcMarketSellCostPrice,
   calcMarketSellMinReceive,
+  calcTakerFeeAllowance,
   calcTradeApprovalKind,
   decimalToUnits,
   decimalToWei,
@@ -24,6 +26,14 @@ test("market buy approval covers contract prepay at 0.5 per share", () => {
 
   assert.equal(amount, 4_000_000n);
   assert.equal(calcMarketPrepay(amount), 2_000_000n);
+});
+
+test("market buy approval includes taker fee allowance", () => {
+  const maxCost = decimalToUnits("1.1", 6);
+  const feeRate = 200n;
+
+  assert.equal(calcTakerFeeAllowance(maxCost, feeRate), 220n);
+  assert.equal(calcMarketBuyApproval(maxCost, feeRate), 1_100_220n);
 });
 
 test("market sell does not require a USDC prepay allowance", () => {

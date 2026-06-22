@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 export const SUBGRAPH_URL =
-  "https://api.studio.thegraph.com/query/1755304/around-market/v0.0.9";
+  "https://api.studio.thegraph.com/query/1755304/around-market/v0.0.12";
 
 const ACTIVE_ORDER_STATUSES = ["ACTIVE", "PARTIALLY_FILLED"] as const;
 
@@ -434,7 +434,7 @@ export function activeOrders(orders: SubgraphLimitOrder[]): SubgraphLimitOrder[]
 
 export function bestBid(orders: SubgraphLimitOrder[]): bigint | undefined {
   return activeOrders(orders)
-    .filter((order) => order.isYes && BigInt(order.remaining) > 0n)
+    .filter((order) => order.kind === "COLLATERAL_BUY" && order.isYes && BigInt(order.remaining) > 0n)
     .reduce<bigint | undefined>((best, order) => {
       const price = BigInt(order.price);
       return best === undefined || price > best ? price : best;
@@ -443,10 +443,26 @@ export function bestBid(orders: SubgraphLimitOrder[]): bigint | undefined {
 
 export function bestAsk(orders: SubgraphLimitOrder[]): bigint | undefined {
   return activeOrders(orders)
-    .filter((order) => !order.isYes && BigInt(order.remaining) > 0n)
+    .filter((order) => order.kind === "SHARE_SELL" && order.shareOutcome === "NO" && BigInt(order.remaining) > 0n)
     .reduce<bigint | undefined>((best, order) => {
       const price = BigInt(order.price);
-      return best === undefined || price > best ? price : best;
+      return best === undefined || price < best ? price : best;
+    }, undefined);
+}
+
+export function bestShareSellPrice(
+  orders: SubgraphLimitOrder[],
+  outcome: Outcome,
+): bigint | undefined {
+  return activeOrders(orders)
+    .filter((order) => {
+      if (order.kind !== "SHARE_SELL") return false;
+      if (order.shareOutcome !== outcome) return false;
+      return BigInt(order.remaining) > 0n;
+    })
+    .reduce<bigint | undefined>((best, order) => {
+      const price = BigInt(order.price);
+      return best === undefined || price < best ? price : best;
     }, undefined);
 }
 

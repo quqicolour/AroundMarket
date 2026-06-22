@@ -23,15 +23,12 @@ interface DisplayLevel extends OrderBookLevel {
 function priceToCents(price: bigint): number {
   return Number(price) / 1e16;
 }
-
 function amountToShares(amount: bigint, decimals: number): number {
   return unitsToNumber(amount, decimals);
 }
-
 function collateralTotal(depth: bigint, price: bigint, decimals: number): number {
   return unitsToNumber((depth * price) / 10n ** 18n, decimals);
 }
-
 function formatNumber(value: number, fractionDigits = 2): string {
   if (!Number.isFinite(value)) return "-";
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
@@ -41,7 +38,6 @@ function formatNumber(value: number, fractionDigits = 2): string {
     maximumFractionDigits: fractionDigits,
   });
 }
-
 function buildDisplayLevels(rows: OrderBookLevel[], decimals: number): DisplayLevel[] {
   let cumulativeShares = 0;
   return rows.map((row) => {
@@ -72,15 +68,8 @@ export default function OrderBookView({ marketId, collateralAddr }: Props) {
     () => buildOutcomeOrderBookLevels(orders, selectedOutcome),
     [orders, selectedOutcome],
   );
-
-  const buyLevels = useMemo(
-    () => buildDisplayLevels(buyRows, collateralDecimals),
-    [buyRows, collateralDecimals],
-  );
-  const sellLevels = useMemo(
-    () => buildDisplayLevels(sellRows, collateralDecimals),
-    [sellRows, collateralDecimals],
-  );
+  const buyLevels = useMemo(() => buildDisplayLevels(buyRows, collateralDecimals), [buyRows, collateralDecimals]);
+  const sellLevels = useMemo(() => buildDisplayLevels(sellRows, collateralDecimals), [sellRows, collateralDecimals]);
 
   const maxCumulativeDepth = Math.max(
     ...buyLevels.map((row) => row.cumulativeShares),
@@ -89,16 +78,13 @@ export default function OrderBookView({ marketId, collateralAddr }: Props) {
   );
   const bestBuy = buyRows[0]?.price ?? 0n;
   const bestSell = sellRows[0]?.price ?? 0n;
-  const spread =
-    bestBuy > 0n && bestSell > 0n
-      ? priceToCents(bestSell) - priceToCents(bestBuy)
-      : null;
+  const spread = bestBuy > 0n && bestSell > 0n ? priceToCents(bestSell) - priceToCents(bestBuy) : null;
 
   if (isLoading) {
     return (
       <div className="orderbook-shell">
-        {[0, 1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="orderbook-skeleton" />
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="skeleton" style={{ height: 32, borderRadius: 8 }} />
         ))}
       </div>
     );
@@ -107,7 +93,7 @@ export default function OrderBookView({ marketId, collateralAddr }: Props) {
   if (buyLevels.length === 0 && sellLevels.length === 0) {
     return (
       <div className="orderbook-empty">
-        <p>No orders yet</p>
+        <strong>No orders yet</strong>
         <span>Place a limit order to create the first price level.</span>
       </div>
     );
@@ -115,14 +101,14 @@ export default function OrderBookView({ marketId, collateralAddr }: Props) {
 
   return (
     <div className="orderbook-shell">
-      <div className="orderbook-outcome-switch" role="tablist" aria-label="Order book outcome">
+      <div className="segmented" role="tablist" aria-label="Order book outcome" style={{ maxWidth: 320 }}>
         {(["YES", "NO"] as const).map((outcome) => (
           <button
             key={outcome}
             type="button"
             role="tab"
             aria-selected={selectedOutcome === outcome}
-            className={selectedOutcome === outcome ? "active" : ""}
+            className={`seg-item ${selectedOutcome === outcome ? "active" : ""}`}
             onClick={() => setSelectedOutcome(outcome)}
           >
             {outcome}
@@ -131,12 +117,21 @@ export default function OrderBookView({ marketId, collateralAddr }: Props) {
       </div>
 
       <div className="orderbook-summary">
-        <SummaryTile label={`Best ${selectedOutcome} Buy`} value={bestBuy > 0n ? `${priceToCents(bestBuy).toFixed(1)}c` : "-"} tone="yes" />
-        <SummaryTile label="Spread" value={spread !== null ? `${spread.toFixed(1)}c` : "-"} />
-        <SummaryTile label={`Best ${selectedOutcome} Sell`} value={bestSell > 0n ? `${priceToCents(bestSell).toFixed(1)}c` : "-"} tone="no" />
+        <div className="stat-tile yes">
+          <span className="stat-label">Best {selectedOutcome} Buy</span>
+          <span className="stat-value">{bestBuy > 0n ? `${priceToCents(bestBuy).toFixed(1)}¢` : "-"}</span>
+        </div>
+        <div className="stat-tile">
+          <span className="stat-label">Spread</span>
+          <span className="stat-value">{spread !== null ? `${spread.toFixed(1)}¢` : "-"}</span>
+        </div>
+        <div className="stat-tile no">
+          <span className="stat-label">Best {selectedOutcome} Sell</span>
+          <span className="stat-value">{bestSell > 0n ? `${priceToCents(bestSell).toFixed(1)}¢` : "-"}</span>
+        </div>
       </div>
 
-      <div className="orderbook-panels">
+      <div className="orderbook-panels" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         <OrderSide
           title={`Buy ${selectedOutcome}`}
           tone="yes"
@@ -152,23 +147,6 @@ export default function OrderBookView({ marketId, collateralAddr }: Props) {
           emptyLabel={`No ${selectedOutcome} sell orders`}
         />
       </div>
-    </div>
-  );
-}
-
-function SummaryTile({
-  label,
-  value,
-  tone = "neutral",
-}: {
-  label: string;
-  value: string;
-  tone?: "yes" | "no" | "neutral";
-}) {
-  return (
-    <div className={`orderbook-summary-tile ${tone}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
     </div>
   );
 }
@@ -189,38 +167,40 @@ function OrderSide({
   const totalShares = levels.length > 0 ? levels[levels.length - 1].cumulativeShares : 0;
 
   return (
-    <section className={`orderbook-side ${tone}`} aria-label={title}>
-      <div className="orderbook-side-header">
-        <div>
-          <strong>{title}</strong>
-          <span>{levels.length} levels</span>
+    <section className="orderbook-side">
+      <div className="orderbook-side-inner">
+        <div className={`orderbook-side-head ${tone}`}>
+          <div className="title-block">
+            <strong>{title}</strong>
+            <span>{levels.length} levels</span>
+          </div>
+          <div className="total-block">
+            <span>Total depth</span>
+            <strong>{formatNumber(totalShares)}</strong>
+          </div>
         </div>
-        <div className="orderbook-side-total">
-          <span>Total depth</span>
-          <strong>{formatNumber(totalShares)}</strong>
+
+        <div className="orderbook-head-row">
+          <span>Price</span>
+          <span>Shares</span>
+          <span>Total</span>
+          <span>Orders</span>
         </div>
-      </div>
 
-      <div className="orderbook-table-head">
-        <span>Price</span>
-        <span>Shares</span>
-        <span>Total</span>
-        <span>Orders</span>
-      </div>
-
-      <div className="orderbook-table-body">
-        {levels.length === 0 ? (
-          <div className="orderbook-side-empty">{emptyLabel}</div>
-        ) : (
-          levels.map((level) => (
-            <OrderBookRow
-              key={level.price.toString()}
-              level={level}
-              tone={tone}
-              maxCumulativeDepth={maxCumulativeDepth}
-            />
-          ))
-        )}
+        <div className="orderbook-body">
+          {levels.length === 0 ? (
+            <div className="orderbook-side-empty">{emptyLabel}</div>
+          ) : (
+            levels.map((level) => (
+              <OrderBookRow
+                key={level.price.toString()}
+                level={level}
+                tone={tone}
+                maxCumulativeDepth={maxCumulativeDepth}
+              />
+            ))
+          )}
+        </div>
       </div>
     </section>
   );
@@ -239,13 +219,8 @@ function OrderBookRow({
 
   return (
     <div className={`orderbook-row ${tone}`}>
-      <div
-        className="orderbook-depth-fill"
-        style={{
-          width: `${depthPct}%`,
-        }}
-      />
-      <span className="orderbook-price">{priceToCents(level.price).toFixed(1)}c</span>
+      <div className="orderbook-depth-fill" style={{ width: `${depthPct}%` }} />
+      <span className="price">{priceToCents(level.price).toFixed(1)}¢</span>
       <span>{formatNumber(level.shares)}</span>
       <span>{formatNumber(level.totalCollateral)}</span>
       <span>{level.orderCount}</span>
