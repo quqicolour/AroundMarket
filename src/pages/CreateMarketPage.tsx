@@ -1,8 +1,19 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAccount, useReadContract, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
+import {
+  useAccount,
+  useReadContract,
+  useWaitForTransactionReceipt,
+  useWriteContract,
+} from "wagmi";
 import { encodeAbiParameters, keccak256 } from "viem";
-import { CalendarClock, Database, FileText, Loader2, ShieldCheck } from "lucide-react";
+import {
+  CalendarClock,
+  Database,
+  FileText,
+  Loader2,
+  ShieldCheck,
+} from "lucide-react";
 import { ABIs } from "../abis";
 import { CONTRACTS } from "../config/contracts";
 import { useTxToast } from "../components/TxToastContext";
@@ -28,9 +39,22 @@ export default function CreateMarketPage() {
   const [errorMsg, setErrorMsg] = useState("");
   const [lastHash, setLastHash] = useState<string | null>(null);
 
-  const { writeContract, data: txHash, isPending, error: writeError } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess, isError } = useWaitForTransactionReceipt({ hash: txHash });
-  const { data: factoryOwner, isLoading: isOwnerLoading, isError: isOwnerError } = useReadContract({
+  const {
+    writeContract,
+    data: txHash,
+    isPending,
+    error: writeError,
+  } = useWriteContract();
+  const {
+    isLoading: isConfirming,
+    isSuccess,
+    isError,
+  } = useWaitForTransactionReceipt({ hash: txHash });
+  const {
+    data: factoryOwner,
+    isLoading: isOwnerLoading,
+    isError: isOwnerError,
+  } = useReadContract({
     abi: ABIs.PredictionMarketFactory,
     address: CONTRACTS.PredictionMarketFactory,
     functionName: "owner",
@@ -41,7 +65,8 @@ export default function CreateMarketPage() {
   const feePercent = Number.parseFloat(fee || "0");
   const ownerAddress = typeof factoryOwner === "string" ? factoryOwner : "";
   const isCreatorWallet =
-    Boolean(address && ownerAddress) && address?.toLowerCase() === ownerAddress.toLowerCase();
+    Boolean(address && ownerAddress) &&
+    address?.toLowerCase() === ownerAddress.toLowerCase();
   const isWorking = isPending || isConfirming;
   const cannotCreate =
     !isConnected ||
@@ -60,7 +85,9 @@ export default function CreateMarketPage() {
   const durationDays = useMemo(() => {
     const start = Math.floor(new Date(startTime).getTime() / 1000);
     const end = Math.floor(new Date(endTime).getTime() / 1000);
-    return start > 0 && end > start ? Math.max(1, Math.ceil((end - start) / 86400)) : null;
+    return start > 0 && end > start
+      ? Math.max(1, Math.ceil((end - start) / 86400))
+      : null;
   }, [endTime, startTime]);
 
   useEffect(() => {
@@ -86,7 +113,10 @@ export default function CreateMarketPage() {
 
   useEffect(() => {
     if (!writeError) return;
-    const rawMsg = (writeError as any)?.shortMessage || (writeError as any)?.message || "Transaction failed";
+    const rawMsg =
+      (writeError as any)?.shortMessage ||
+      (writeError as any)?.message ||
+      "Transaction failed";
     const msg = normalizeCreateMarketError(rawMsg, ownerAddress);
     setErrorMsg(msg);
     showError(msg);
@@ -101,11 +131,15 @@ export default function CreateMarketPage() {
     setErrorMsg("");
 
     if (isOwnerError) {
-      setErrorMsg("Unable to verify factory owner. Check RPC/network and try again.");
+      setErrorMsg(
+        "Unable to verify factory owner. Check RPC/network and try again.",
+      );
       return;
     }
     if (ownerAddress && !isCreatorWallet) {
-      setErrorMsg(`Only the factory owner can create markets. Owner: ${shortAddress(ownerAddress)}`);
+      setErrorMsg(
+        `Only the factory owner can create markets. Owner: ${shortAddress(ownerAddress)}`,
+      );
       return;
     }
     if (endTs <= startTs) {
@@ -133,7 +167,8 @@ export default function CreateMarketPage() {
         ],
       } as any);
     } catch (err: any) {
-      const msg = err?.shortMessage ?? err?.message ?? "Failed to create market";
+      const msg =
+        err?.shortMessage ?? err?.message ?? "Failed to create market";
       setErrorMsg(msg);
       showError(msg);
     }
@@ -144,7 +179,9 @@ export default function CreateMarketPage() {
       <div className="page-header">
         <div>
           <h1>Create Market</h1>
-          <p>Launch a YES / NO prediction market on a verifiable future event.</p>
+          <p>
+            Launch a YES / NO prediction market on a verifiable future event.
+          </p>
         </div>
       </div>
 
@@ -190,11 +227,21 @@ export default function CreateMarketPage() {
             <div className="create-form-two-col">
               <label>
                 <span>Start Time</span>
-                <input type="datetime-local" value={startTime} onChange={(event) => setStartTime(event.target.value)} className="input" />
+                <input
+                  type="datetime-local"
+                  value={startTime}
+                  onChange={(event) => setStartTime(event.target.value)}
+                  className="input"
+                />
               </label>
               <label>
                 <span>End Time</span>
-                <input type="datetime-local" value={endTime} onChange={(event) => setEndTime(event.target.value)} className="input" />
+                <input
+                  type="datetime-local"
+                  value={endTime}
+                  onChange={(event) => setEndTime(event.target.value)}
+                  className="input"
+                />
               </label>
             </div>
 
@@ -211,7 +258,11 @@ export default function CreateMarketPage() {
                   type="button"
                   onClick={() => {
                     const start = new Date(startTime);
-                    setEndTime(toLocalDateTimeInput(new Date(start.getTime() + pick.hours * 3600_000)));
+                    setEndTime(
+                      toLocalDateTimeInput(
+                        new Date(start.getTime() + pick.hours * 3600_000),
+                      ),
+                    );
                   }}
                 >
                   End {pick.label}
@@ -222,11 +273,23 @@ export default function CreateMarketPage() {
             <div className="create-form-terms-grid">
               <label>
                 <span>Collateral Token</span>
-                <input value={collateral} onChange={(event) => setCollateral(event.target.value)} className="input input-mono mono-input" />
+                <input
+                  value={collateral}
+                  onChange={(event) => setCollateral(event.target.value)}
+                  className="input input-mono mono-input"
+                />
               </label>
               <label>
                 <span>Fee (%)</span>
-                <input type="number" min="0" max="100" step="0.01" value={fee} onChange={(event) => setFee(event.target.value)} className="input" />
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={fee}
+                  onChange={(event) => setFee(event.target.value)}
+                  className="input"
+                />
               </label>
             </div>
           </CreateSection>
@@ -234,33 +297,46 @@ export default function CreateMarketPage() {
           {errorMsg && <div className="create-error">{errorMsg}</div>}
           {isConnected && ownerAddress && !isCreatorWallet && (
             <div className="create-access-note">
-              Connected wallet cannot create markets. Switch to factory owner {shortAddress(ownerAddress)}.
+              Connected wallet cannot create markets. Switch to factory owner{" "}
+              {shortAddress(ownerAddress)}.
             </div>
           )}
 
           <div className="create-page-actions">
-            <button type="submit" disabled={cannotCreate} className="btn btn-primary">
+            <button
+              type="submit"
+              disabled={cannotCreate}
+              className="btn btn-primary"
+            >
               {isWorking ? (
-                <Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} aria-hidden="true" />
+                <Loader2
+                  size={16}
+                  style={{ animation: "spin 1s linear infinite" }}
+                  aria-hidden="true"
+                />
               ) : null}
               {isWorking
-                ? (isConfirming ? "Confirming..." : "Signing...")
+                ? isConfirming
+                  ? "Confirming..."
+                  : "Signing..."
                 : !isConnected
-                ? "Connect Wallet"
-                : isOwnerLoading
-                ? "Checking Owner..."
-                : isOwnerError
-                ? "Owner Check Failed"
-                : ownerAddress && !isCreatorWallet
-                ? "Owner Wallet Required"
-                : "Create Market"}
+                  ? "Connect Wallet"
+                  : isOwnerLoading
+                    ? "Checking Owner..."
+                    : isOwnerError
+                      ? "Owner Check Failed"
+                      : ownerAddress && !isCreatorWallet
+                        ? "Owner Wallet Required"
+                        : "Create Market"}
             </button>
           </div>
         </div>
 
         <aside className="create-preview-panel">
           <div className="create-preview-head">
-            <span className="icon"><ShieldCheck size={16} strokeWidth={2.2} aria-hidden="true" /></span>
+            <span className="icon">
+              <ShieldCheck size={16} strokeWidth={2.2} aria-hidden="true" />
+            </span>
             <div>
               <strong>Preview</strong>
               <p>How the market appears in the list</p>
@@ -272,15 +348,32 @@ export default function CreateMarketPage() {
               <span className="tag">NEW</span>
               <span className="state">Active</span>
             </div>
-            <h2>{trimmedQuestion || "Your market question will appear here"}</h2>
-            <p>{trimmedDataSource || "Add a data source so traders understand how this market resolves."}</p>
-            <div className="create-preview-bars" aria-hidden="true"><span /><span /></div>
-            <div className="create-preview-outcomes"><span className="y">YES</span><span className="n">NO</span></div>
+            <h2>
+              {trimmedQuestion || "Your market question will appear here"}
+            </h2>
+            <p>
+              {trimmedDataSource ||
+                "Add a data source so traders understand how this market resolves."}
+            </p>
+            <div className="create-preview-bars" aria-hidden="true">
+              <span />
+              <span />
+            </div>
+            <div className="create-preview-outcomes">
+              <span className="y">YES</span>
+              <span className="n">NO</span>
+            </div>
           </div>
 
           <div className="create-preview-stats">
-            <div className="create-preview-stat"><span>Duration</span><strong>{durationDays ? `${durationDays}d` : "Check"}</strong></div>
-            <div className="create-preview-stat"><span>Fee</span><strong>{Number.isFinite(feePercent) ? feePercent : 0}%</strong></div>
+            <div className="create-preview-stat">
+              <span>Duration</span>
+              <strong>{durationDays ? `${durationDays}d` : "Check"}</strong>
+            </div>
+            <div className="create-preview-stat">
+              <span>Fee</span>
+              <strong>{Number.isFinite(feePercent) ? feePercent : 0}%</strong>
+            </div>
           </div>
 
           {conditionId && (
@@ -295,7 +388,17 @@ export default function CreateMarketPage() {
   );
 }
 
-function CreateSection({ icon, title, hint, children }: { icon: React.ReactNode; title: string; hint: string; children: React.ReactNode }) {
+function CreateSection({
+  icon,
+  title,
+  hint,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  hint: string;
+  children: React.ReactNode;
+}) {
   return (
     <section className="create-section">
       <div className="create-section-head">
